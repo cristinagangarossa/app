@@ -1,0 +1,467 @@
+package com.neperiagroup.happysalus;
+
+import android.annotation.SuppressLint;
+import android.bluetooth.BluetoothDevice;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.SharedPreferences;
+import android.preference.PreferenceManager;
+import android.support.v4.view.GravityCompat;
+import android.support.v4.view.ViewPager;
+import android.support.v4.widget.DrawerLayout;
+import android.support.v7.app.AppCompatActivity;
+import android.os.Bundle;
+import android.support.v7.widget.Toolbar;
+import android.util.Log;
+import android.view.Menu;
+import android.view.MenuItem;
+import android.view.View;
+import android.widget.AdapterView;
+import android.widget.Button;
+import android.widget.ListView;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import com.htsmart.wristband.WristbandApplication;
+import com.htsmart.wristband.bean.WristbandConfig;
+import com.htsmart.wristband.connector.ConnectorListener;
+import com.htsmart.wristband.connector.IDeviceConnector;
+import com.htsmart.wristband.scanner.IDeviceScanner;
+import com.neperiagroup.happysalus.adapters.DeviceDataAdapter;
+import com.neperiagroup.happysalus.adapters.ScrollDevicesAdapter;
+import com.neperiagroup.happysalus.bean.Device;
+import com.neperiagroup.happysalus.bean.ScanDevices;
+import com.neperiagroup.happysalus.bean.User;
+import com.neperiagroup.happysalus.services.DeviceService;
+import com.neperiagroup.happysalus.services.WritePeriodicalyService;
+import com.neperiagroup.happysalus.utility.StoreInMemory;
+import com.neperiagroup.happysalus.utility.TagUser;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+import cn.imengya.bluetoothle.scanner.ScanDeviceWrapper;
+import cn.imengya.bluetoothle.scanner.ScannerListener;
+
+public class DashboardActivity extends AppCompatActivity{
+
+    private Toolbar toolbar;
+    private TextView toolbarTitle;
+    private DrawerLayout drawer;
+
+    private ViewPager pager;
+    private ScrollDevicesAdapter scrollAdapter;
+    private Button btnBack;
+    private Button btnNext;
+
+    private ListView deviceDataList;
+    private DeviceDataAdapter dataAdapter;
+    private Button btnPair;
+
+    private DeviceService deviceService;
+    private int selectedDevice;
+    private User mUser = MyApplication.getInstance().getUser();
+    private StoreInMemory storeInMemory;
+    private TagUser tagUser;
+
+    public static final String currentMonth="current_month";
+    public static final String preMonth="pre_month";
+
+
+    /**
+     * Scanner
+     */
+    private IDeviceScanner mDeviceScanner = MyApplication.getDeviceScanner();
+    /**
+     * Datas
+     */
+    private List<ScanDeviceWrapper> mDevices;
+
+    /**
+     * Connector
+     */
+    public static final String ACTION_CONNECT_DEVICE = BuildConfig.APPLICATION_ID + ".action.connect_device";
+    private BluetoothDevice mBluetoothDevice;
+    private IDeviceConnector mDeviceConnector = WristbandApplication.getDeviceConnector();
+    private WristbandConfig mWristbandConfig;
+
+    @SuppressLint({"ResourceAsColor", "LongLogTag"})
+    @Override
+    protected void onCreate(Bundle savedInstanceState){
+        super.onCreate(savedInstanceState);
+        createFolder();
+        setContentView(R.layout.activity_dashboard);
+
+        tagUser = new TagUser();
+        storeInMemory = new StoreInMemory(getApplicationContext());
+        mDevices = new ArrayList<>(10);
+        selectedDevice = 0; //Inizializza la variabile a zero, ovvero priimo dispositivo della dashboard
+
+        if(storeInMemory.getListNameBtcDeviceUserBindFromStore(tagUser.getKEY_USER_ID()).size()!=0){// && !isUserBound()){//Se ci sono dispositivi che sono stati associati
+            //Add ScannerListener in onCreate. And you should Remove ScannerListener int onDestroy.
+            mDeviceScanner.addScannerListener(mScannerListener);
+
+            startScanning();
+
+            new Thread(new Run()).start();
+        };
+
+
+        //service setup.
+        deviceService = new DeviceService(getApplicationContext());
+
+        //toolbar setup.
+        toolbar = findViewById(R.id.toolbar);
+        toolbar.setTitleTextColor(R.color.white);
+        setSupportActionBar(toolbar);
+        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+        getSupportActionBar().setHomeAsUpIndicator(R.drawable.ic_menu);
+        getSupportActionBar().setDisplayShowTitleEnabled(false);
+        toolbarTitle = findViewById(R.id.dashboard_toolbar_title);
+        toolbarTitle.setText(deviceService.getDevices().get(0).getModelDevice());
+
+        //drawer setup.
+        drawer = findViewById(R.id.drawer_layout);
+
+        //button back setup.
+        btnBack = findViewById(R.id.backDeviceButton);
+        btnBack.setOnClickListener(new View.OnClickListener(){
+            @Override
+            public void onClick(View view){
+                pager.setCurrentItem(getItem(-1));
+            }
+        });
+
+        btnNext = findViewById(R.id.nextDeviceButton);
+        btnNext.setOnClickListener(new View.OnClickListener(){
+            @Override
+            public void onClick(View view){
+                pager.setCurrentItem(getItem(+1));
+            }
+        });
+
+        //pager setup.
+        pager = (ViewPager) findViewById(R.id.viewpager);
+        scrollAdapter = new ScrollDevicesAdapter(getApplicationContext(), deviceService.getDevices());
+        pager.setAdapter(scrollAdapter);
+        pager.addOnPageChangeListener(new ViewPager.OnPageChangeListener(){
+            @Override
+            public void onPageScrolled(int position, float positionOffset, int positionOffsetPixels){}
+
+            @Override
+            public void onPageSelected(int position){
+                selectedDevice = position;
+                Device device = deviceService.getDevices().get(position);
+                toolbarTitle.setText(device.getModelDevice());
+                boolean isPaired = storeInMemory.checkNameBtcDeviceUserBindFromStore(tagUser.getKEY_USER_ID(), device.getNameBtnDevice());
+                btnPair.setVisibility((isPaired) ? View.INVISIBLE : View.VISIBLE);
+                //btnPair.setVisibility(View.VISIBLE);
+                dataAdapter = new DeviceDataAdapter(getApplicationContext(), device.getListDataDevice());
+                deviceDataList.setAdapter(dataAdapter);
+            }
+
+            @Override
+            public void onPageScrollStateChanged(int state){}
+        });
+
+        //device data setup.
+        deviceDataList = findViewById(R.id.listViewDeviceData);
+        dataAdapter = new DeviceDataAdapter(getApplicationContext(), deviceService.getDevices().get(0).getListDataDevice());
+        deviceDataList.setAdapter(dataAdapter);
+        deviceDataList.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
+                switch (deviceService.getDevices().get(selectedDevice).getListDataDevice().get(i).getDataType()){
+                    case "heart":
+                        startActivity(HeartRateStatsActivity.getInstanceIntent(getApplicationContext(), deviceService.getDevices().get(selectedDevice).getModelDevice()));
+                        break;
+                    case "oxygen":
+                        startActivity(OxygenStatsActivity.getInstanceIntent(getApplicationContext(),deviceService.getDevices().get(selectedDevice).getListDataDevice().get(i)  ,deviceService.getDevices().get(selectedDevice).getModelDevice()));
+                        break;
+                    case "steps":
+                        startActivity(StepsStatsActivity.getInstanceIntent(getApplicationContext(),deviceService.getDevices().get(selectedDevice).getListDataDevice().get(i)  ,deviceService.getDevices().get(selectedDevice).getModelDevice()));
+                        break;
+                    case "sleep":
+                        startActivity(SleepStatsActivity.getInstanceIntent(getApplicationContext(),deviceService.getDevices().get(selectedDevice).getListDataDevice().get(i)  ,deviceService.getDevices().get(selectedDevice).getModelDevice()));
+                        break;
+                    case "pressure":
+                        if(deviceService.getDevices().get(selectedDevice).getModelDevice().equalsIgnoreCase("Sfigmomanometro")){
+                            startActivity(SphygmomanometerActivity.getInstanceIntent(getApplicationContext(), 1));
+                        }else startActivity(PressureStatsActivity.getInstanceIntent(getApplicationContext(),deviceService.getDevices().get(selectedDevice).getListDataDevice().get(i)  ,deviceService.getDevices().get(selectedDevice).getModelDevice()));
+                        break;
+                    case "balance":
+                        startActivity(BalanceStatsActivity.getInstanceIntent(getApplicationContext(),deviceService.getDevices().get(selectedDevice).getListDataDevice().get(i)  ,deviceService.getDevices().get(selectedDevice).getModelDevice()));
+                        break;
+                    case "breathFrequency":
+                        startActivity(BreatheFreqStatsActivity.getInstanceIntent(getApplicationContext(),deviceService.getDevices().get(selectedDevice).getListDataDevice().get(i)  ,deviceService.getDevices().get(selectedDevice).getModelDevice()));
+                    default:
+
+                        break;
+
+                }
+
+            }
+        });
+
+
+        //button pair setup.
+        btnPair = findViewById(R.id.buttonAssociaDevice);
+        boolean isPaired = storeInMemory.checkNameBtcDeviceUserBindFromStore(tagUser.getKEY_USER_ID(), deviceService.getDevices().get(0).getNameBtnDevice());
+        btnPair.setVisibility((isPaired) ? View.INVISIBLE : View.VISIBLE);
+        btnPair.setOnClickListener(new View.OnClickListener(){
+            @Override
+            public void onClick(View view){
+                switch(selectedDevice){
+                    case 0://Braccialetto
+                        startActivity(SearchActivity.getInstanceIntent(getApplicationContext(), deviceService.getDevices().get(selectedDevice)));
+                        break;
+                    case 1://Bilancia
+                        startActivity(ScaleConnectionActivity.getInstanceIntent(getApplicationContext(), 0)); //0=Scale Paring
+                        break;
+                    case 2://Sfigmomanometro
+                        startActivity(BloodPressureConnectionActivity.getInstanceIntent(getApplicationContext(), 0)); //0=Blood pressure Paring
+                        break;
+                }
+
+            }
+        });
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu){
+        getMenuInflater().inflate(R.menu.menu_main_activity, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item){
+        switch(item.getItemId()){
+            case android.R.id.home:
+                drawer.openDrawer(GravityCompat.START);
+                return true;
+            case R.id.settings:
+                startActivity(SettingsActivity.getIstanceIntent(getApplicationContext()));
+                break;
+        }
+
+        return super.onOptionsItemSelected(item);
+    }
+
+    public static Intent getInstanceIntent(Context context){
+        Intent intent = new Intent(context, DashboardActivity.class);
+        return intent;
+    }
+
+    private int getItem(int i){
+        return pager.getCurrentItem() + i;
+    }
+
+    /**
+     * Judge whether the device is  already exists in the list.
+     *
+     * @param wrapDevice device
+     * @return True indicates in the list. False not.
+     */
+    private boolean existDevice(ScanDeviceWrapper wrapDevice) {
+        if (mDevices.size() <= 0) return false;
+        for (ScanDeviceWrapper device : mDevices) {
+            if (device.getDevice().getAddress().equals(wrapDevice.getDevice().getAddress())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private ScannerListener mScannerListener = new ScannerListener() {
+
+        /**
+         * A device is found
+         * @param scanDeviceWrapper The device be found
+         */
+        @Override
+        public void onScan(ScanDeviceWrapper scanDeviceWrapper) {
+            if (!existDevice(scanDeviceWrapper)) {
+                mDevices.add(scanDeviceWrapper);
+            }
+        }
+
+        /**
+         * Scan has stopped
+         */
+        @Override
+        public void onStop() {
+            stopScanning();
+        }
+    };
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        //Remove ScannerListener
+        /*
+        mDeviceScanner.removeScannerListener(mScannerListener);
+        mDeviceConnector.removeConnectorListener(mConnectorListener);
+        mDeviceConnector.close();
+        try{
+            unregisterReceiver(mBroadcastReceiver);
+        } catch (Exception e){
+            e.printStackTrace();
+        }
+        */
+        //unregisterReceiver(mBroadcastReceiver);
+        //setUserBound(false);
+    }
+
+    /**
+     * Start scan
+     */
+    private void startScanning() {
+        mDevices.clear();
+        mDeviceScanner.start();
+        invalidateOptionsMenu();
+    }
+
+    /**
+     * Stop scan
+     */
+    private void stopScanning() {
+        mDeviceScanner.stop();
+        invalidateOptionsMenu();
+    }
+
+    private BroadcastReceiver mBroadcastReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (ACTION_CONNECT_DEVICE.equals(intent.getAction())) {
+                connect();
+            }
+        }
+    };
+
+
+    private boolean isUserBound() {
+        SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
+        return sharedPreferences.getBoolean(tagUser.getKEY_USER_BIND() + mUser.getId(), false);
+    }
+
+    private void setUserBound(boolean bound) {
+        SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
+        sharedPreferences.edit().putBoolean(tagUser.getKEY_USER_BIND() + mUser.getId(), bound).apply();
+    }
+
+
+    private void connect() {
+        if (isUserBound()) {
+            Log.i("-------connessione","Login");
+            mDeviceConnector.connectWithLogin(mBluetoothDevice, MyApplication.getInstance().getUser());
+        } else {
+            Log.i("-------connessione","Bind");
+            mDeviceConnector.connectWithBind(mBluetoothDevice, MyApplication.getInstance().getUser());
+        }
+        Toast.makeText(getApplicationContext(), R.string.connecting, Toast.LENGTH_LONG).show();
+        updateConnectBtn(true, false);
+    }
+
+    private ConnectorListener mConnectorListener = new ConnectorListener() {
+        @Override
+        public void onConnect(WristbandConfig config) {
+            updateConnectBtn(false, true);
+            mWristbandConfig = config;
+            btnPair.setVisibility(View.INVISIBLE);
+            //Log.e(TAG, "WristbandConfig:" + Arrays.toString(config.getBytes()));
+            MyApplication.getInstance().setNotificationConfig(config.getNotificationConfig());
+            setUserBound(true);
+            Toast.makeText(getApplicationContext(), R.string.connect, Toast.LENGTH_SHORT).show();
+            //TODO abilite this for background monitoring
+            startService(new Intent(getApplicationContext(),WritePeriodicalyService.class));
+
+
+        }
+
+        @Override
+        public void onDisconnect(final boolean b, final boolean b1) {
+            Toast.makeText(getApplicationContext(), R.string.disconnect, Toast.LENGTH_LONG).show();
+            btnPair.setVisibility(View.VISIBLE);
+            updateConnectBtn(true, true);
+            //TODO abilite this for background monitoring
+            stopService(new Intent(getApplicationContext(),WritePeriodicalyService.class));
+        }
+
+        @Override
+        public void onConnectFailed(final int i) {
+            Toast.makeText(getApplicationContext(), R.string.connect_failed, Toast.LENGTH_LONG).show();
+            btnPair.setVisibility(View.VISIBLE);
+            updateConnectBtn(true, true);
+        }
+    };
+
+    private void updateConnectBtn(boolean connect, boolean enable) {
+        //mConnectBtn.setText(connect ? R.string.connect : R.string.disconnect);
+        btnPair.setEnabled(enable);
+    }
+
+    public class Run implements Runnable{
+        @Override
+        public void run() {
+            while (true){
+                try {
+                    //Toast.makeText(getApplicationContext(), "Run.", Toast.LENGTH_SHORT).show();
+                    Thread.sleep(3000L); //Durata dello scan
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                    //Toast.makeText(getApplicationContext(), "Error.", Toast.LENGTH_SHORT).show();
+                }
+                boolean scanning = mDeviceScanner.isScanning();
+                stopScanning();
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        boolean scanning = mDeviceScanner.isScanning();
+                        stopScanning();
+                        boolean deviceFound = false;
+                        for(ScanDeviceWrapper scanDeviceWrapper : mDevices){//Scorre la lista dei device trovati
+                            if(scanDeviceWrapper.getDevice().getName()!=null) {
+                                //Preleva dalla memoria dello smartphone i device già associati
+                                List<String> ListNameBtcDeviceUserBind = storeInMemory.getListNameBtcDeviceUserBindFromStore(tagUser.getKEY_USER_ID());
+                                for(String nameBtcDevice : ListNameBtcDeviceUserBind){//Scorre la lista dei device già associati
+                                    if (scanDeviceWrapper.getDevice().getName().equalsIgnoreCase(nameBtcDevice)) {//Se corrisponde con il device trovato nello scan
+                                        deviceFound = true;//Dispositivo Trovato
+                                        mBluetoothDevice = scanDeviceWrapper.getDevice();
+                                        mDeviceConnector.addConnectorListener(mConnectorListener);//Inizializzo la connessione
+                                        connect();//Connetti
+                                        registerReceiver(mBroadcastReceiver, new IntentFilter(ACTION_CONNECT_DEVICE));
+                                    }
+                                }
+
+                            }
+                        }
+                        if(deviceFound==false){
+                            Toast.makeText(getApplicationContext(), "Dispositivo non trovato.", Toast.LENGTH_SHORT).show();
+                        }
+                        return;//Stop thread
+                    }
+                });
+                return;//Stop Run
+            }
+        }
+    }
+
+    private void createFolder(){
+        String currentMonthPath=this.getApplicationContext().getFilesDir()+"/"+currentMonth;
+        File currentMonthFolder = new File(currentMonthPath);
+        if(!currentMonthFolder.isDirectory()){
+            currentMonthFolder.mkdir();
+        }
+        String preMonthPath=getApplicationContext().getFilesDir()+"/"+preMonth;
+        File preMonthFolder=new File(preMonthPath);
+        if(!preMonthFolder.isDirectory()){
+            preMonthFolder.mkdir();
+        }
+
+    }
+}
+

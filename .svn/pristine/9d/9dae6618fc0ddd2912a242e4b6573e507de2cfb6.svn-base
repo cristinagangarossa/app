@@ -1,0 +1,110 @@
+package com.neperiagroup.happysalus;
+
+import android.content.Context;
+import android.content.Intent;
+import android.os.Bundle;
+import android.support.v7.app.AppCompatActivity;
+import android.support.v7.widget.Toolbar;
+import android.view.Menu;
+import android.view.MenuItem;
+import android.widget.ListView;
+import android.widget.TextView;
+
+import com.neperiagroup.happysalus.adapters.WeekDataAdapter;
+import com.neperiagroup.happysalus.bean.DataDevice;
+import com.neperiagroup.happysalus.bean.GenericDayData;
+import com.neperiagroup.happysalus.bean.OxygenDayData;
+import com.neperiagroup.happysalus.bean.StepDayData;
+import com.neperiagroup.happysalus.bean.WeekData;
+
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+
+public class StepsStatsActivity extends AppCompatActivity{
+    private static final String TAG = StepsStatsActivity.class.getName();
+    private static final String DEVICE_DATA_KEY = TAG + ".device_data";
+    private static final String DEVICE_NAME_KEY = TAG + ".device_name";
+
+    private Toolbar toolbar;
+    private TextView toolbarTitle;
+
+    private String deviceName;
+    private DataDevice deviceData;
+
+    private ListView weeksDataList;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState){
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_steps_stats);
+
+        //deserialize device object.
+        deviceData = (DataDevice) getIntent().getSerializableExtra(DEVICE_DATA_KEY);
+        deviceName = getIntent().getStringExtra(DEVICE_NAME_KEY);
+
+        //stats toolbar setup.
+        toolbar = findViewById(R.id.statsToolbar);
+        setSupportActionBar(toolbar);
+        getSupportActionBar().setDisplayShowTitleEnabled(false);
+        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+        toolbarTitle = findViewById(R.id.stats_toolbar_title);
+        toolbarTitle.setText(deviceName);
+        weeksDataList=findViewById(R.id.listWeekData);
+
+        WeekDataAdapter weekDataAdapter=new WeekDataAdapter(getApplicationContext(),getWeeks());
+        weeksDataList.setAdapter(weekDataAdapter);
+    }
+
+    @Override
+    public boolean onSupportNavigateUp(){
+        finish();
+        return true;
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu){
+        getMenuInflater().inflate(R.menu.menu_main_activity, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item){
+//        switch(item.getItemId()){
+//            case R.id.settings:
+//                startActivity(SettingsActivity.getInstanceIntent(getApplicationContext()));
+//                return true;
+//        }
+        return super.onOptionsItemSelected(item);
+    }
+
+    public static Intent getInstanceIntent(Context context, DataDevice deviceData, String deviceName){
+        Intent intent = new Intent(context, StepsStatsActivity.class);
+        intent.putExtra(DEVICE_DATA_KEY, deviceData);
+        intent.putExtra(DEVICE_NAME_KEY, deviceName);
+        return intent;
+    }
+
+    private List<WeekData> getWeeks() {
+        //TODO get from storage
+        List<WeekData> weeks = new ArrayList<WeekData>();
+        WeekData current = new WeekData("Questa Settimana", "600 Media");
+        List<GenericDayData> days1 = new ArrayList<GenericDayData>();
+        StepDayData day1 = new StepDayData();
+        Date date1 = new Date();
+        day1.setDate(date1);
+        day1.setData("500");
+        StepDayData day2 = new StepDayData();
+        day2.setDate(date1);
+        day2.setData("700");
+        days1.add(day1);
+        days1.add(day2);
+        current.setDays(days1);
+        WeekData pre = new WeekData("24 SET - 30 SET", "96 Media");
+
+        weeks.add(current);
+        weeks.add(pre);
+
+        return weeks;
+    }
+}

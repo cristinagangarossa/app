@@ -1,0 +1,71 @@
+package com.neperiagroup.happysalus;
+
+import android.content.Context;
+import android.content.Intent;
+import android.os.Bundle;
+import android.support.v7.app.AppCompatActivity;
+import android.support.v7.widget.Toolbar;
+import android.view.Menu;
+import android.view.MenuItem;
+import android.widget.TextView;
+
+import com.neperiagroup.happysalus.bean.DataDevice;
+
+public class BreatheFreqStatsActivity extends AppCompatActivity{
+    private static final String TAG = BreatheFreqStatsActivity.class.getName();
+    private static final String DEVICE_DATA_KEY = TAG + ".device_data";
+    private static final String DEVICE_NAME_KEY = TAG + ".device_name";
+
+    private Toolbar toolbar;
+    private TextView toolbarTitle;
+
+    private String deviceName;
+    private DataDevice deviceData;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState){
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_breathe_freq);
+
+        //deserialize device object.
+        deviceData = (DataDevice) getIntent().getSerializableExtra(DEVICE_DATA_KEY);
+        deviceName = getIntent().getStringExtra(DEVICE_NAME_KEY);
+
+        //stats toolbar setup.
+        toolbar = findViewById(R.id.statsToolbar);
+        setSupportActionBar(toolbar);
+        getSupportActionBar().setDisplayShowTitleEnabled(false);
+        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+        toolbarTitle = findViewById(R.id.stats_toolbar_title);
+        toolbarTitle.setText(deviceName);
+    }
+
+    @Override
+    public boolean onSupportNavigateUp(){
+        finish();
+        return true;
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu){
+        getMenuInflater().inflate(R.menu.menu_main_activity, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item){
+//        switch(item.getItemId()){
+//            case R.id.settings:
+//                startActivity(SettingsActivity.getInstanceIntent(getApplicationContext()));
+//                return true;
+//        }
+        return super.onOptionsItemSelected(item);
+    }
+
+    public static Intent getInstanceIntent(Context context, DataDevice deviceData, String deviceName){
+        Intent intent = new Intent(context, BreatheFreqStatsActivity.class);
+        intent.putExtra(DEVICE_DATA_KEY, deviceData);
+        intent.putExtra(DEVICE_NAME_KEY, deviceName);
+        return intent;
+    }
+}

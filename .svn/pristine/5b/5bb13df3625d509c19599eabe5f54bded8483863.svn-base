@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <android.support.v7.preference.SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="switch_notifications_steps"
+        android:title="Passi" />
+
+    <android.support.v7.preference.SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:key="switch_notifications_distance"
+        android:title="Distanza" />
+
+    <android.support.v7.preference.SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="switch_notifications_calories"
+        android:title="Calorie" />
+
+    <android.support.v7.preference.SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="switch_notifications_heart_rate"
+        android:title="Frequenza cardiaca" />
+
+    <android.support.v7.preference.SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:key="switch_notifications_blood_pressure"
+        android:title="Pressione sanguigna" />
+
+    <android.support.v7.preference.SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="switch_notifications_sleep_mode"
+        android:title="Modalità sonno" />
+
+    <android.support.v7.preference.SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="switch_notifications_battery"
+        android:title="Batteria" />
+
+    <android.support.v7.preference.SwitchPreferenceCompat
+        android:defaultValue="true"
+        android:key="switch_notifications_hydration_reminder"
+        android:title="Promemoria idratazione" />
+
+</PreferenceScreen>

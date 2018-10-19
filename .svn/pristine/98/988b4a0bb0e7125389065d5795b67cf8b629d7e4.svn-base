@@ -1,0 +1,429 @@
+package com.neperiagroup.happysalus.services;
+
+import android.app.IntentService;
+import android.content.Intent;
+import android.util.Log;
+
+
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import com.htsmart.wristband.WristbandApplication;
+import com.htsmart.wristband.performer.IDevicePerformer;
+import com.neperiagroup.happysalus.MyApplication;
+import com.neperiagroup.happysalus.bean.PressData;
+import com.neperiagroup.happysalus.bean.PressSaveDataBean;
+import com.neperiagroup.happysalus.bean.SaveDataBean;
+import com.neperiagroup.happysalus.bean.SleepSaveDataBean;
+import com.neperiagroup.happysalus.listeners.WriterListener;
+import com.neperiagroup.happysalus.utility.StoreInMemory;
+
+import java.io.IOException;
+import java.lang.reflect.Type;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.List;
+
+public class WritePeriodicalyService extends IntentService {
+    private final String FILE_HR = "fileHr";
+    private final String FILE_OXYGEN = "fileOxygen";
+    private final String FILE_BLOOD_PRESSURE_MIN = "fileBloodPressureMin";
+    private final String FILE_BLOOD_PRESSURE_MAX = "fileBloodPressureMin";
+    private final String FILE_BLOOD_PRESSURE = "fileBloodPressureTot";
+    private final String FILE_BREATH_REATE = "fileBreath";
+    private final String FILE_STEP = "file_step";
+    private final String FILE_SLEEP= "file_sleep";
+    public static final String currentMonth="current_month";
+    private boolean active = true;
+
+    private List<SaveDataBean> hrToday;
+    private List<SaveDataBean> oxygenToday;
+    private List<SaveDataBean> bloodMinToday;
+    private List<SaveDataBean> bloodMaxToday;
+    private List<SaveDataBean> breathRateToday;
+    private List<SaveDataBean> stepdToday;
+    private List<PressSaveDataBean> pressToday;
+    private SleepSaveDataBean sleepSaveDataBeanToday;
+
+    private IDevicePerformer mDevicePerformer = WristbandApplication.getDevicePerformer();
+
+    private static final String TAG = WritePeriodicalyService.class.getName();
+
+    private FileMamoryService fileMamoryService;
+    private StoreInMemory storeInMemory;
+    public WritePeriodicalyService() {
+        super("WritePeriodicalyService");
+    }
+
+    @Override
+    protected void onHandleIntent(Intent i) {
+        fileMamoryService = new FileMamoryService(getApplicationContext());
+        storeInMemory=new StoreInMemory(getApplicationContext());
+        mDevicePerformer.cmd_requestWristbandConfig();
+        readTodayData();
+        int n = 0;
+        mDevicePerformer.addPerformerListener(mPerformerListener);
+        Log.i("WRITE SERVICE", "START");
+        SaveDataBean toSave = new SaveDataBean();
+
+        while (active) {
+
+
+            try {
+                Date now = new Date();
+                if (isDayCanged()) {
+                    readTodayData();
+                }
+
+
+                mDevicePerformer.syncData();
+
+
+                if (((MyApplication) getApplication()).addOxygenConnection()) {
+                    mDevicePerformer.openHealthyRealTimeData(IDevicePerformer.HEALTHY_TYPE_OXYGEN);
+                }
+                if (((MyApplication) getApplication()).addHrConnection()) {
+                    mDevicePerformer.openHealthyRealTimeData(IDevicePerformer.HEALTHY_TYPE_HEART_RATE);
+                }
+                if (((MyApplication) getApplication()).addBlodPressorConnection()) {
+                    mDevicePerformer.openHealthyRealTimeData(IDevicePerformer.HEALTHY_TYPE_BLOOD_PRESSURE);
+                }
+                if (((MyApplication) getApplication()).addRespiratoryConnection()) {
+                    mDevicePerformer.openHealthyRealTimeData(IDevicePerformer.HEALTHY_TYPE_RESPIRATORY_RATE);
+                }
+                if (((MyApplication) getApplication()).addEcgConnection()) {
+                    mDevicePerformer.openHealthyRealTimeData(IDevicePerformer.HEALTHY_TYPE_ECG);
+                }
+                Thread.sleep(180000);
+
+                ((MyApplication) getApplication()).removeOxygenConnection();
+                ((MyApplication) getApplication()).removeHrConnection();
+                ((MyApplication) getApplication()).removeBlodPressorConnection();
+                ((MyApplication) getApplication()).removeRespiratoryConnection();
+                ((MyApplication) getApplication()).removeEcgConnection();
+
+                //mDevicePerformer.closeHealthyRealTimeData(IDevicePerformer.HEALTHY_TYPE_OXYGEN);
+                if (((MyApplication) getApplication()).realtimeConnectionClose()) {
+                    mDevicePerformer.closeHealthyRealTimeData(IDevicePerformer.HEALTHY_TYPE_OXYGEN);
+                    mDevicePerformer.closeHealthyRealTimeData(IDevicePerformer.HEALTHY_TYPE_HEART_RATE);
+                    mDevicePerformer.closeHealthyRealTimeData(IDevicePerformer.HEALTHY_TYPE_BLOOD_PRESSURE);
+                    mDevicePerformer.closeHealthyRealTimeData(IDevicePerformer.HEALTHY_TYPE_RESPIRATORY_RATE);
+                    mDevicePerformer.closeHealthyRealTimeData(IDevicePerformer.HEALTHY_TYPE_ECG);
+                }
+
+                //mDevicePerformer.closeHealthyRealTimeData(IDevicePerformer.HEALTHY_TYPE_ECG);
+
+                Log.e(TAG, "------------------");
+                Log.e(TAG, "oxygen " + mPerformerListener.getOxygen());
+                Log.e(TAG, "------------------");
+                if(mPerformerListener.getOxygen()!=0){
+                    toSave = new SaveDataBean();
+                    toSave.setDate(now);
+                    toSave.setValue(String.valueOf(mPerformerListener.getOxygen()));
+                    oxygenToday.add(toSave);
+                    Gson gson = new Gson();
+                    String json = gson.toJson(toSave);
+                    storeInMemory.setValueStringToStore("lastOxygen",json);
+                }
+
+
+
+                Log.e(TAG, "------------------");
+                Log.e(TAG, "HeartRate " + mPerformerListener.getHeartRate());
+                Log.e(TAG, "------------------");
+                if( mPerformerListener.getHeartRate()!=0) {
+                    toSave = new SaveDataBean();
+                    toSave.setDate(now);
+                    toSave.setValue(String.valueOf(mPerformerListener.getHeartRate()));
+                    hrToday.add(toSave);
+                    Gson gson = new Gson();
+                    String json = gson.toJson(toSave);
+                    storeInMemory.setValueStringToStore("lastHeartRate",json);
+                }
+
+                Log.e(TAG, "------------------");
+                Log.e(TAG, "Bload Pressure min" + mPerformerListener.getDiastolicPressure());
+                Log.e(TAG, "------------------");
+                if( mPerformerListener.getDiastolicPressure()!=0) {
+                    toSave = new SaveDataBean();
+                    toSave.setDate(now);
+                    toSave.setValue(String.valueOf(mPerformerListener.getDiastolicPressure()));
+                    bloodMinToday.add(toSave);
+                    Gson gson = new Gson();
+                    String json = gson.toJson(toSave);
+                    storeInMemory.setValueStringToStore("lastDiastolicPressure",json);
+                }
+
+                Log.e(TAG, "------------------");
+                Log.e(TAG, "Bload Pressure max" + mPerformerListener.getDiastolicPressure());
+                Log.e(TAG, "------------------");
+                if(mPerformerListener.getDiastolicPressure()!=0) {
+                    toSave = new SaveDataBean();
+                    toSave.setDate(now);
+                    toSave.setValue(String.valueOf(mPerformerListener.getSystolicPressure()));
+                    bloodMaxToday.add(toSave);
+                    Gson gson = new Gson();
+                    String json = gson.toJson(toSave);
+                    storeInMemory.setValueStringToStore("lastSystolicPressure",json);
+                }
+                if(mPerformerListener.getDiastolicPressure()!=0 && mPerformerListener.getSystolicPressure()!=0 ){
+                    PressSaveDataBean pressSaveDataBean=new PressSaveDataBean();
+                    pressSaveDataBean.setDate(now);
+                    PressData pressData=new PressData();
+                    pressData.setMin(Math.round(mPerformerListener.getDiastolicPressure()));
+                    pressData.setMax(Math.round(mPerformerListener.getSystolicPressure()));
+                    pressSaveDataBean.setPressData(pressData);
+                    pressToday.add(pressSaveDataBean);
+                    Gson gson = new Gson();
+                    String json = gson.toJson(pressSaveDataBean);
+                    storeInMemory.setValueStringToStore("lastPressure",json);
+                }
+
+
+                Log.e(TAG, "------------------");
+                Log.e(TAG, "RespiratoryRate" + mPerformerListener.getRespiratoryRate());
+                Log.e(TAG, "------------------");
+                if(mPerformerListener.getRespiratoryRate()!=0) {
+                    toSave = new SaveDataBean();
+                    toSave.setDate(now);
+                    toSave.setValue(String.valueOf(mPerformerListener.getRespiratoryRate()));
+                    breathRateToday.add(toSave);
+                    Gson gson = new Gson();
+                    String json = gson.toJson(toSave);
+                    storeInMemory.setValueStringToStore("lastRespiratoryRate",json);
+                }
+
+                Log.e(TAG, "------------------");
+                Log.e(TAG, "Steps" + mPerformerListener.getSteps());
+                Log.e(TAG, "------------------");
+                if(mPerformerListener.getSteps()!=0) {
+                    toSave = new SaveDataBean();
+                    toSave.setDate(now);
+                    toSave.setValue(String.valueOf(mPerformerListener.getSteps()));
+                    stepdToday.add(toSave);
+                    Gson gson = new Gson();
+                    String json = gson.toJson(toSave);
+                    storeInMemory.setValueStringToStore("lastStep",json);
+                }
+                if(mPerformerListener.getDeepSleep()!=0 || mPerformerListener.getLightSleep()!=0){
+                    SleepSaveDataBean sleepSaveDataBean=new SleepSaveDataBean();
+                    sleepSaveDataBean.setDate(now);
+                    sleepSaveDataBean.setHardSleep(mPerformerListener.getDeepSleep());
+                    sleepSaveDataBean.setLightSleep(mPerformerListener.getLightSleep());
+                    sleepSaveDataBeanToday=sleepSaveDataBean;
+                    Gson gson = new Gson();
+                    String json = gson.toJson(toSave);
+                    storeInMemory.setValueStringToStore("lastSleep",json);
+                }
+                writeToMemory();
+                mPerformerListener.clearAll();
+
+                Thread.sleep(3300000);
+                //Thread.sleep(120000);
+
+            } catch (InterruptedException e) {
+            }
+        }
+    }
+
+    @Override
+    public void onDestroy() {
+        Log.i("PROVA SERVICE", "Distruzione Service");
+        active = false;
+    }
+
+    WriterListener mPerformerListener = new WriterListener();
+
+
+    private void readTodayData() {
+
+        String json = null;
+        Type listTypeDaySaveDataBean = new TypeToken<ArrayList<SaveDataBean>>() {
+        }.getType();
+        Calendar today = Calendar.getInstance();
+        String date = "" + today.get(Calendar.DAY_OF_MONTH) + today.get(Calendar.MONTH);
+        try {
+            json = fileMamoryService.readFromFile(getApplicationContext().getFilesDir() + "/"+currentMonth+"/"+FILE_HR + "_" + date + ".txt");
+            if (!json.equals("")) {
+                hrToday = new Gson().fromJson(json, listTypeDaySaveDataBean);
+            } else {
+                hrToday = new ArrayList<>();
+            }
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        try {
+            json = fileMamoryService.readFromFile(getApplicationContext().getFilesDir() + "/"+currentMonth+"/"+FILE_OXYGEN + "_" + date + ".txt");
+            if (!json.equals("")) {
+                oxygenToday = new Gson().fromJson(json, listTypeDaySaveDataBean);
+            } else {
+                oxygenToday = new ArrayList<>();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        try {
+
+            json = fileMamoryService.readFromFile(getApplicationContext().getFilesDir() + "/"+currentMonth+"/"+FILE_BREATH_REATE + "_" + date + ".txt");
+            if (!json.equals("")) {
+                breathRateToday = new Gson().fromJson(json, listTypeDaySaveDataBean);
+            } else {
+                breathRateToday = new ArrayList<>();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        try {
+            json = fileMamoryService.readFromFile(getApplicationContext().getFilesDir() + "/"+currentMonth+"/"+FILE_BLOOD_PRESSURE_MIN + "_" + date + ".txt");
+            if (!json.equals("")) {
+                bloodMinToday = new Gson().fromJson(json, listTypeDaySaveDataBean);
+            } else {
+                bloodMinToday = new ArrayList<>();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        try {
+            json = fileMamoryService.readFromFile( getApplicationContext().getFilesDir() + "/"+currentMonth+"/"+FILE_BLOOD_PRESSURE_MAX + "_" + date + ".txt");
+            if (!json.equals("")) {
+                bloodMaxToday = new Gson().fromJson(json, listTypeDaySaveDataBean);
+            } else {
+                bloodMaxToday = new ArrayList<>();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        try{
+            Type listTypeDaySaveDataBeanPress = new TypeToken<ArrayList<PressSaveDataBean>>() {
+            }.getType();
+            String path=getApplicationContext().getFilesDir()+"/"+currentMonth+"/"+FILE_BLOOD_PRESSURE+"_"+date+".txt";
+            json = fileMamoryService.readFromFile(path);
+            if (!json.equals("")) {
+                pressToday = new Gson().fromJson(json, listTypeDaySaveDataBeanPress);
+            } else {
+                pressToday = new ArrayList<>();
+            }
+
+
+        }catch (IOException e){
+            e.printStackTrace();
+        }
+
+        try {
+            json = fileMamoryService.readFromFile(getApplicationContext().getFilesDir() + "/"+currentMonth+"/"+FILE_STEP + "_" + date + ".txt");
+            if (!json.equals("")) {
+                stepdToday = new Gson().fromJson(json, listTypeDaySaveDataBean);
+            } else {
+                stepdToday = new ArrayList<>();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        try{
+            Type listTypeDaySaveDataBeanPress = new TypeToken<ArrayList<SleepSaveDataBean>>() {
+            }.getType();
+            String path=getApplicationContext().getFilesDir()+"/"+currentMonth+"/"+FILE_SLEEP+"_"+date+".txt";
+            json = fileMamoryService.readFromFile(path);
+            if (!json.equals("")) {
+                sleepSaveDataBeanToday = new Gson().fromJson(json, listTypeDaySaveDataBeanPress);
+            } else {
+                sleepSaveDataBeanToday = new SleepSaveDataBean();
+            }
+
+
+        }catch (IOException e){
+            e.printStackTrace();
+        }
+
+
+
+    }
+
+    private boolean isDayCanged() {
+        Date today = new Date();
+        Calendar cToday = Calendar.getInstance();
+        cToday.setTime(today);
+        if (hrToday.size() != 0) {
+            Calendar cInList = Calendar.getInstance();
+            cInList.setTime(hrToday.get(0).getDate());
+            if (cInList.get(Calendar.DATE) != cToday.get(Calendar.DATE)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void writeToMemory() {
+        Gson gson = new Gson();
+        String json = gson.toJson(hrToday);
+        Log.i("---string---", json);
+        Calendar today = Calendar.getInstance();
+        String date = "" + today.get(Calendar.DAY_OF_MONTH) + today.get(Calendar.MONTH);
+        try {
+            fileMamoryService.writeFile(FILE_HR + "_" + date + ".txt", json);
+        } catch (IOException e) {
+            e.printStackTrace();
+            Log.e("Errore", e.getMessage());
+        }
+        json = gson.toJson(oxygenToday);
+        Log.i("---string---", json);
+        try {
+            fileMamoryService.writeFile(FILE_OXYGEN + "_" + date + ".txt", json);
+        } catch (IOException e) {
+            e.printStackTrace();
+            Log.e("Errore", e.getMessage());
+        }
+        json = gson.toJson(bloodMinToday);
+        Log.i("---string---", json);
+        try {
+            fileMamoryService.writeFile(FILE_BLOOD_PRESSURE_MIN + "_" + date + ".txt", json);
+        } catch (IOException e) {
+            e.printStackTrace();
+            Log.e("Errore", e.getMessage());
+        }
+        json = gson.toJson(bloodMaxToday);
+        Log.i("---string---", json);
+        try {
+            fileMamoryService.writeFile(FILE_BLOOD_PRESSURE_MAX + "_" + date + ".txt", json);
+        } catch (IOException e) {
+            e.printStackTrace();
+            Log.e("Errore", e.getMessage());
+        }
+        json = gson.toJson(breathRateToday);
+        Log.i("---string---", json);
+        try {
+            fileMamoryService.writeFile(FILE_BREATH_REATE + "_" + date + ".txt", json);
+        } catch (IOException e) {
+            e.printStackTrace();
+            Log.e("Errore", e.getMessage());
+        }
+        json = gson.toJson(stepdToday);
+        Log.i("---string---", json);
+        try {
+            fileMamoryService.writeFile(FILE_STEP + "_" + date + "txt", json);
+        } catch (IOException e) {
+            e.printStackTrace();
+            Log.e("Errore", e.getMessage());
+        }
+
+        json=gson.toJson(pressToday);
+        Log.i("---string---", json);
+        try{
+            fileMamoryService.writeFile(FILE_BLOOD_PRESSURE + "_" + date + "txt", json);
+        } catch (IOException e) {
+            e.printStackTrace();
+            Log.e("Errore", e.getMessage());
+        }
+        json=gson.toJson(sleepSaveDataBeanToday);
+        Log.i("---string---", json);
+        try{
+            fileMamoryService.writeFile(FILE_SLEEP + "_" + date + "txt", json);
+        } catch (IOException e) {
+            e.printStackTrace();
+            Log.e("Errore", e.getMessage());
+        }
+    }
+}

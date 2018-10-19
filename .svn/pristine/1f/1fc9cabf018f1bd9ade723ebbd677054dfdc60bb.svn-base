@@ -1,0 +1,89 @@
+package com.neperiagroup.happysalus.utility;
+
+import android.content.Context;
+import android.content.SharedPreferences;
+
+import com.neperiagroup.happysalus.bean.Device;
+import com.neperiagroup.happysalus.bean.User;
+
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
+
+public class StoreInMemory {
+
+    private Context context;
+
+    public StoreInMemory(Context context) {
+        this.context = context;
+    }
+
+    public void setValueBooleanToStore(String key, boolean value){
+        String nameClassKey = context.getClass().getName();
+        SharedPreferences sharedPreferences = context.getSharedPreferences(nameClassKey, Context.MODE_PRIVATE);
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putBoolean(key, value);
+        editor.commit();
+    }
+
+    public boolean getValueBooleanFromStore(String key){
+        String nameClassKey = context.getClass().getName();
+        SharedPreferences sharedPreferences = context.getSharedPreferences(nameClassKey, Context.MODE_PRIVATE);
+        return sharedPreferences.getBoolean(key, false);
+    }
+
+    public void setValueIntToStore(String key, int value){
+        String nameClassKey = context.getClass().getName();
+        SharedPreferences sharedPreferences = context.getSharedPreferences(nameClassKey, Context.MODE_PRIVATE);
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putInt(key, value);
+        editor.commit();
+    }
+
+    public int getValueIntFromStore(String key){
+        String nameClassKey = context.getClass().getName();
+        SharedPreferences sharedPreferences = context.getSharedPreferences(nameClassKey, Context.MODE_PRIVATE);
+        return sharedPreferences.getInt(key, 0);
+    }
+
+    public void setNameBtcDeviceUserBindToStore(String keyUserId, String nameBtcDevice){
+        String nameClassKey = context.getClass().getName();
+        SharedPreferences sharedPreferences = context.getSharedPreferences(nameClassKey, Context.MODE_PRIVATE);
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        if(!checkNameBtcDeviceUserBindFromStore(keyUserId, nameBtcDevice)){//Se il dispositivo non è stato mai associato
+            int sizeList = sharedPreferences.getInt("sizeListDevices_userId" + keyUserId, 0);
+            sizeList++;
+            editor.putInt("sizeListDevices_userId" + keyUserId , sizeList);//Memorizza dimensione array
+            sizeList--;
+            editor.putString(keyUserId + "_" + sizeList, nameBtcDevice);//Memorizza nome
+            editor.commit();
+        }//Fine if
+    }
+
+    public boolean checkNameBtcDeviceUserBindFromStore(String keyUserId, String nameBtcDevice){
+        String nameClassKey = context.getClass().getName();
+        SharedPreferences sharedPreferences = context.getSharedPreferences(nameClassKey, Context.MODE_PRIVATE);
+        int sizeList = sharedPreferences.getInt("sizeListDevices_userId" + keyUserId, 0);
+        for(int i=0; i<sizeList; i++){
+            String nameDevice = sharedPreferences.getString(keyUserId + "_" + i, null);
+            if(nameDevice!=null){
+                if(nameDevice.equalsIgnoreCase(nameBtcDevice)){
+                    return true; //Device già associato in precedenza
+                }
+            }
+        }
+        return false; //Dispositivo non trovato
+    }
+
+    public List<String> getListNameBtcDeviceUserBindFromStore(String keyUserId){
+        String nameClassKey = context.getClass().getName();
+        SharedPreferences sharedPreferences = context.getSharedPreferences(nameClassKey, Context.MODE_PRIVATE);
+        int sizeList = sharedPreferences.getInt("sizeListDevices_userId" + keyUserId, 0);
+        List<String> nameBtcDevices = new ArrayList<String>();
+        for(int i=0; i<sizeList; i++){
+            nameBtcDevices.add(sharedPreferences.getString(keyUserId + "_" + i, null));
+        }
+        return nameBtcDevices;
+    }
+
+}

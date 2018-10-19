@@ -1,0 +1,357 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".DeviceSettingsFragment">
+
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:padding="10dp" >
+
+            <LinearLayout
+                android:id="@+id/linearLayoutActivityDevice"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="horizontal"
+                android:padding="15dp"
+                android:clickable="true"
+                android:background="@android:drawable/list_selector_background">
+
+                <TextView
+                    android:id="@+id/textViewSettingsDevice1"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Attività"
+                    android:textSize="14sp" />
+
+                <ImageView
+                    android:id="@+id/imageViewArrowNext1"
+                    android:layout_width="15dp"
+                    android:layout_height="15dp"
+                    android:src="@drawable/icon_arrow_next_dark" />
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="15dp"
+                android:clickable="true"
+                android:background="@android:drawable/list_selector_background">
+
+                <TextView
+                    android:id="@+id/textViewSettingsDevice2"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Obiettivo attività"
+                    android:textSize="14dp"/>
+
+                <TextView
+                    android:id="@+id/textViewInfoSettingsDevice1"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="700 passi"
+                    android:textSize="14dp"/>
+
+                <ImageView
+                    android:id="@+id/imageViewArrowNext2"
+                    android:layout_width="15dp"
+                    android:layout_height="15dp"
+                    android:layout_marginTop="2dp"
+                    android:layout_marginLeft="20dp"
+                    app:srcCompat="@drawable/icon_arrow_next_dark" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="15dp"
+                android:clickable="true"
+                android:background="@android:drawable/list_selector_background">
+
+                <TextView
+                    android:id="@+id/textViewSettingsDevice3"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Obiettivo di peso"
+                    android:textSize="14dp"/>
+
+                <TextView
+                    android:id="@+id/textViewInfoSettingsDevice2"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="61 kg"
+                    android:textSize="14dp"/>
+
+                <ImageView
+                    android:id="@+id/imageViewArrowNext3"
+                    android:layout_width="15dp"
+                    android:layout_height="15dp"
+                    android:layout_marginTop="2dp"
+                    android:layout_marginLeft="20dp"
+                    app:srcCompat="@drawable/icon_arrow_next_dark" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="15dp">
+
+                <Switch
+                    android:id="@+id/switchSettingsDevice1"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:checked="false"
+                    android:switchTextAppearance="@style/TextAppearance.AppCompat"
+                    android:text="Chiamata in arrivo"
+                    tools:checked="false"
+                    android:textColor="@android:color/tab_indicator_text"/>
+
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="15dp"
+                android:clickable="true"
+                android:background="@android:drawable/list_selector_background">
+
+                <TextView
+                    android:id="@+id/textViewSettingsDevice4"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Sveglia"
+                    android:textSize="14dp"/>
+
+                <TextView
+                    android:id="@+id/textViewInfoSettingsDevice3"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Disattivata"
+                    android:textSize="14dp"/>
+
+                <ImageView
+                    android:id="@+id/imageViewArrowNext4"
+                    android:layout_width="15dp"
+                    android:layout_height="15dp"
+                    android:layout_marginTop="2dp"
+                    android:layout_marginLeft="20dp"
+                    app:srcCompat="@drawable/icon_arrow_next_dark" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="15dp">
+
+                <Switch
+                    android:id="@+id/switchSettingsDevice2"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Whatsapp"
+                    android:textColor="@android:color/tab_indicator_text"/>
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="15dp">
+
+                <Switch
+                    android:id="@+id/switchSettingsDevice3"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Email in arrivo"
+                    android:textColor="@android:color/tab_indicator_text"/>
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="15dp">
+
+                <Switch
+                    android:id="@+id/switchSettingsDevice4"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Notifiche obiettivi"
+                    android:textColor="@android:color/tab_indicator_text"/>
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="15dp"
+                android:clickable="true"
+                android:background="@android:drawable/list_selector_background">
+
+                <TextView
+                    android:id="@+id/textViewSettingsDevice5"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Posizione del braccialetto"
+                    android:textSize="14dp"/>
+
+                <TextView
+                    android:id="@+id/textViewInfoSettingsDevice4"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Polso sinistro"
+                    android:textSize="14dp"/>
+
+                <ImageView
+                    android:id="@+id/imageViewArrowNext5"
+                    android:layout_width="15dp"
+                    android:layout_height="15dp"
+                    android:layout_marginTop="2dp"
+                    android:layout_marginLeft="20dp"
+                    app:srcCompat="@drawable/icon_arrow_next_dark" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="horizontal"
+                android:padding="15dp"
+                android:clickable="true"
+                android:background="@android:drawable/list_selector_background">
+
+                <TextView
+                    android:id="@+id/textViewSettingsDevice6"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="App Salute"
+                    android:textSize="14sp" />
+
+                <ImageView
+                    android:id="@+id/imageViewArrowNext6"
+                    android:layout_width="15dp"
+                    android:layout_height="15dp"
+                    android:src="@drawable/icon_arrow_next_dark" />
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="15dp">
+
+                <Switch
+                    android:id="@+id/switchSettingsDevice5"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Health history"
+                    android:textColor="@android:color/tab_indicator_text"/>
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="15dp"
+                android:clickable="true"
+                android:background="@android:drawable/list_selector_background">
+
+                <TextView
+                    android:id="@+id/textViewSettingsDevice7"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Inizio del tempo"
+                    android:textSize="14dp"/>
+
+                <TextView
+                    android:id="@+id/textViewInfoSettingsDevice5"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="08:00"
+                    android:textSize="14dp"/>
+
+                <ImageView
+                    android:id="@+id/imageViewArrowNext7"
+                    android:layout_width="15dp"
+                    android:layout_height="15dp"
+                    android:layout_marginTop="2dp"
+                    android:layout_marginLeft="20dp"
+                    app:srcCompat="@drawable/icon_arrow_next_dark" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="15dp"
+                android:clickable="true"
+                android:background="@android:drawable/list_selector_background">
+
+                <TextView
+                    android:id="@+id/textViewSettingsDevice8"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Fine del tempo"
+                    android:textSize="14dp"/>
+
+                <TextView
+                    android:id="@+id/textViewInfoSettingsDevice6"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="23:00"
+                    android:textSize="14dp"/>
+
+                <ImageView
+                    android:id="@+id/imageViewArrowNext8"
+                    android:layout_width="15dp"
+                    android:layout_height="15dp"
+                    android:layout_marginTop="2dp"
+                    android:layout_marginLeft="20dp"
+                    app:srcCompat="@drawable/icon_arrow_next_dark" />
+
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/button"
+                android:layout_width="123dp"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_marginTop="15dp"
+                android:background="@drawable/button_primary"
+                android:text="Dissocia"
+                android:textColor="@color/white" />
+
+
+        </LinearLayout>
+    </ScrollView>
+
+</FrameLayout>

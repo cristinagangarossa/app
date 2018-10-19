@@ -1,0 +1,869 @@
+package com.neperiagroup.happysalus;
+
+import android.Manifest;
+import android.app.Activity;
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothGatt;
+import android.bluetooth.BluetoothGattCallback;
+import android.bluetooth.BluetoothGattCharacteristic;
+import android.bluetooth.BluetoothGattDescriptor;
+import android.bluetooth.BluetoothGattService;
+import android.bluetooth.BluetoothManager;
+import android.bluetooth.BluetoothProfile;
+import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.os.Build;
+import android.support.annotation.NonNull;
+import android.support.annotation.RequiresApi;
+import android.support.v4.content.ContextCompat;
+import android.support.v7.app.AppCompatActivity;
+import android.os.Bundle;
+import android.util.Log;
+import android.view.View;
+import android.widget.Button;
+import android.widget.Toast;
+
+import com.neperiagroup.happysalus.bean.BLECommunicationObject;
+import com.neperiagroup.happysalus.bean.ScaleData;
+import com.neperiagroup.happysalus.bean.User;
+import com.neperiagroup.happysalus.utility.StoreInMemory;
+import com.neperiagroup.happysalus.utility.TagUser;
+import com.neperiagroup.happysalus.utility.Utils;
+import com.skyfishjy.library.RippleBackground;
+
+import java.util.Date;
+import java.util.LinkedList;
+import java.util.Queue;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+
+public class ScaleConnectionActivity extends AppCompatActivity
+{
+    static final String TAG = "BLEScale";
+    static UUID SCALE_SERVICE_UUID = Utils.convertFromInteger(0x7802);
+    static UUID APP_TO_SCALE_TRANSFER_CHAR_WRITE_UUID = Utils.convertFromInteger(0x8A81);
+    static UUID SCALE_TO_APP_TRANSFER_CHAR_INDICATE_UUID = Utils.convertFromInteger(0x8A82);
+    static UUID SCALE_WEIGHT_MEASUREMENT_CHAR_INDICATE_UUID = Utils.convertFromInteger(0x8A21);
+    static UUID SCALE_BODY_COMPOSITION_CHAR_INDICATE_UUID = Utils.convertFromInteger(0x8A22);
+    static UUID SCALE_WEIGHT_MEASUREMENT_CHAR_NOTIFY_UUID = Utils.convertFromInteger(0x8A23);
+
+    static UUID CLIENT_CHARACTERISTIC_CONFIG_UUID = Utils.convertFromInteger(0x2902);
+
+    final static String SCALE_MODEL = "203B";
+
+    String deviceToDiscoverName = null;
+
+    private Queue<BLECommunicationObject> communicationActionQueue = new LinkedList<BLECommunicationObject>();
+
+    private final static int REQUEST_ENABLE_BT = 1;
+
+    public static boolean characteristicsSent = false;
+    public static boolean mustStorePassword = false;
+    public static boolean processTerminated = false;
+
+    private static final int PERMISSION_REQUEST_COARSE_LOCATION = 456;
+
+    BluetoothAdapter bluetoothAdapter;
+    private BluetoothDevice myDevice;
+    private BluetoothGatt gatt;
+    private BluetoothGattCallback gattCallback = null;
+    private String passwordScale = null;
+    private String accountId = "4B09DF78";
+
+    private StoreInMemory storeInMemory;
+    private TagUser tagUser;
+    private User user;
+
+    @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR2)
+    @Override
+    protected void onCreate(Bundle savedInstanceState)
+    {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_search);
+
+        final RippleBackground rippleBackground=(RippleBackground)findViewById(R.id.rippleContent);
+        rippleBackground.startRippleAnimation();
+
+        storeInMemory = new StoreInMemory(getApplicationContext());
+        tagUser = new TagUser();
+        user = new User();
+        user = storeInMemory.getUser(1);
+
+        writeActionProgress("Bluetooth Activity started");
+        runOnUiThread(new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                Toast.makeText(getApplicationContext(), "pronto per associare il dispositivo", Toast.LENGTH_SHORT).show();
+
+            }
+        });
+
+        boolean canStartScan = true;
+
+        characteristicsSent = false;
+        mustStorePassword = false;
+        processTerminated = false;
+
+        int viewSelected = getIntent().getIntExtra("viewSelected", 1);
+
+        if(viewSelected == 0)
+        {
+            //SharedPreferences sharedPref = ScaleConnectionActivity.this.getPreferences(Context.MODE_PRIVATE);
+            SharedPreferences sharedPref = getSharedPreferences("prefs", 0);
+            SharedPreferences.Editor editor = sharedPref.edit();
+            editor.remove("password_scale");
+            editor.apply();
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
+        {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED)
+            {
+                canStartScan = false;
+                requestPermissions(new String[]{Manifest.permission.ACCESS_COARSE_LOCATION}, PERMISSION_REQUEST_COARSE_LOCATION);
+                Log.d(TAG, "onCreate() - ACCESS_COARSE_LOCATION permission requested");
+            }
+        }
+
+        if(canStartScan)
+        {
+            this.startDiscoveryProcess();
+        }
+    }
+
+    public static Intent getInstanceIntent(Context context, int viewSelected){
+        Intent intent = new Intent(context, ScaleConnectionActivity.class);
+        intent.putExtra("viewSelected", viewSelected);
+        return intent;
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR2)
+    @Override
+    protected void onDestroy()
+    {
+        if (gatt != null)
+        {
+            gatt.disconnect();
+            gatt.close();
+            gatt = null;
+            myDevice = null;
+        }
+        super.onDestroy();
+    }
+
+
+    @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR2)
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults)
+    {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        switch (requestCode)
+        {
+            case PERMISSION_REQUEST_COARSE_LOCATION:
+            {
+                // If request is cancelled, the result arrays are empty.
+                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED)
+                {
+                    // permission was granted, yay! Do the
+                    // contacts-related task you need to do.
+                    this.startDiscoveryProcess();
+                }
+                else
+                {
+                    // permission denied, boo! Disable the
+                    // functionality that depends on this permission.
+                }
+                return;
+            }
+
+            // other 'case' lines to check for other
+            // permissions this app might request
+        }
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR2)
+    private void startDiscoveryProcess()
+    {
+        final BluetoothManager bluetoothManager = (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
+        bluetoothAdapter = bluetoothManager.getAdapter();
+
+        if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled())
+        {
+            Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+            startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
+        }
+
+        //check if this app is already connected to the device
+        if (!this.checkParing(SCALE_MODEL))
+        {
+            //if the device is not connected to the app:
+            // set the device name to connect to
+            // set the status of the protocol to start from
+            storeInMemory.setNameBtcDeviceUserBindToStore(user.getId(), SCALE_MODEL);
+            deviceToDiscoverName = "1" + SCALE_MODEL;
+        }
+        else
+        {
+            deviceToDiscoverName = "0" + SCALE_MODEL + " " + accountId;
+        }
+
+        final BluetoothAdapter.LeScanCallback scanCallback = new BluetoothAdapter.LeScanCallback()
+        {
+            @Override
+            public void onLeScan(BluetoothDevice device, int rssi, byte[] scanRecord)
+            {
+                if (myDevice == null)
+                {
+                    if (device.getName() != null)
+                    {
+                        if (device.getName().startsWith(deviceToDiscoverName))
+                        {
+                            Log.d(TAG, "scanCallback() - discovered device name: " + device.getName());
+                            myDevice = device;
+
+                            if (myDevice != null)
+                            {
+                                Log.d(TAG, "onLeScan() - connect");
+                                gatt = myDevice.connectGatt(ScaleConnectionActivity.this, true, gattCallback);
+                                bluetoothAdapter.stopLeScan(this);
+
+                                //TODO: read device info
+
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    Log.d(TAG, "onLeScan() - already discovered");
+                }
+
+                if (gatt != null)
+                {
+                    gatt.connect();
+                }
+                else if (myDevice != null)
+                {
+                    gatt = myDevice.connectGatt(ScaleConnectionActivity.this, true, gattCallback);
+                }
+                else
+                {
+
+                }
+            }
+        };
+
+        bluetoothAdapter.startLeScan(scanCallback);
+
+        gattCallback = new BluetoothGattCallback()
+        {
+            @Override
+            public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState)
+            {
+                if (status == BluetoothGatt.GATT_SUCCESS && newState == BluetoothProfile.STATE_CONNECTED)
+                {
+                    /*
+                     * Once successfully connected, we must next discover all the
+                     * services on the device before we can read and write their
+                     * characteristics.
+                     */
+                    //finish();
+                    gatt.discoverServices();
+                }
+                else if (status == BluetoothGatt.GATT_SUCCESS && newState == BluetoothProfile.STATE_DISCONNECTED)
+                {
+                    /*
+                     * If at any point we disconnect, send a message to clear the
+                     * weather values out of the UI
+                     */
+                }
+                else if (status == 19)
+                {
+                    /*
+                     * If at any point we disconnect, send a message to clear the
+                     * weather values out of the UI
+                     */
+                    gatt.connect();
+
+                }
+                else if (status != BluetoothGatt.GATT_SUCCESS)
+                {
+                    /*
+                     * If there is a failure at any stage, simply disconnect
+                     */
+                    gatt.disconnect();
+                }
+
+                Log.d(TAG, "onConnectionStateChange() - status " + status + " --> newState " + newState);
+            }
+
+            @Override
+            public void onServicesDiscovered(BluetoothGatt gatt, int status)
+            {
+                if (!characteristicsSent)
+                {
+                    if (!checkParing(SCALE_MODEL))
+                    {
+                        characteristicsSent = true;
+                    }
+                    BLECommunicationObject object = null;
+
+                    //enable indicate on SCALE_TO_APP_TRANSFER_CHAR_INDICATE_UUID
+                    Log.d(TAG, "onServicesDiscovered() - queue enable scale to app indication " + SCALE_TO_APP_TRANSFER_CHAR_INDICATE_UUID);
+                    object = new BLECommunicationObject();
+                    object.setType(BLECommunicationObject.TYPE_DESCRIPTOR);
+                    object.setCharacteristic(SCALE_TO_APP_TRANSFER_CHAR_INDICATE_UUID);
+                    object.setDescriptor(CLIENT_CHARACTERISTIC_CONFIG_UUID);
+                    object.setAction(BLECommunicationObject.ACTION_WRITE);
+                    object.setValue(BluetoothGattDescriptor.ENABLE_INDICATION_VALUE);
+                    object.setDescription("enable scale to app indication");
+                    object.setMustEnableNotify(true);
+                    communicationActionQueue.add(object);
+
+                    //enable indicate on SCALE_WEIGHT_MEASUREMENT_CHAR_INDICATE_UUID
+                    Log.d(TAG, "onServicesDiscovered() - queue enable scale weight measurement indication " + SCALE_WEIGHT_MEASUREMENT_CHAR_INDICATE_UUID);
+                    object = new BLECommunicationObject();
+                    object.setType(BLECommunicationObject.TYPE_DESCRIPTOR);
+                    object.setCharacteristic(SCALE_WEIGHT_MEASUREMENT_CHAR_INDICATE_UUID);
+                    object.setDescriptor(CLIENT_CHARACTERISTIC_CONFIG_UUID);
+                    object.setAction(BLECommunicationObject.ACTION_WRITE);
+                    object.setValue(BluetoothGattDescriptor.ENABLE_INDICATION_VALUE);
+                    object.setDescription("enable scale weight measurement indication");
+                    object.setMustEnableNotify(true);
+                    communicationActionQueue.add(object);
+
+                    //enable indicate on SCALE_BODY_COMPOSITION_CHAR_INDICATE_UUID
+                    Log.d(TAG, "onServicesDiscovered() - queue enable scale body composition indication " + SCALE_BODY_COMPOSITION_CHAR_INDICATE_UUID);
+                    object = new BLECommunicationObject();
+                    object.setType(BLECommunicationObject.TYPE_DESCRIPTOR);
+                    object.setCharacteristic(SCALE_BODY_COMPOSITION_CHAR_INDICATE_UUID);
+                    object.setDescriptor(CLIENT_CHARACTERISTIC_CONFIG_UUID);
+                    object.setAction(BLECommunicationObject.ACTION_WRITE);
+                    object.setValue(BluetoothGattDescriptor.ENABLE_INDICATION_VALUE);
+                    object.setDescription("enable scale body composition indication");
+                    object.setMustEnableNotify(true);
+                    communicationActionQueue.add(object);
+
+                    //enable notify on SCALE_WEIGHT_MEASUREMENT_CHAR_NOTIFY_UUID
+                    Log.d(TAG, "onServicesDiscovered() - queue enable scale weight measurement notify " + SCALE_WEIGHT_MEASUREMENT_CHAR_NOTIFY_UUID);
+                    object = new BLECommunicationObject();
+                    object.setType(BLECommunicationObject.TYPE_DESCRIPTOR);
+                    object.setCharacteristic(SCALE_WEIGHT_MEASUREMENT_CHAR_NOTIFY_UUID);
+                    object.setDescriptor(CLIENT_CHARACTERISTIC_CONFIG_UUID);
+                    object.setAction(BLECommunicationObject.ACTION_WRITE);
+                    object.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+                    object.setDescription("enable scale weight measurement notify");
+                    object.setMustEnableNotify(true);
+                    communicationActionQueue.add(object);
+
+                    //send first from queue
+                    doNextAction();
+                }
+                else
+                {
+                }
+            }
+
+            @Override
+            public void onDescriptorRead(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status)
+            {
+                Log.d(TAG, "onDescriptorRead() - " + descriptor.getUuid() + " on characteristic " + descriptor.getCharacteristic().getUuid() + " status " + status);
+
+                doNextAction();
+            }
+
+            @Override
+            public void onDescriptorWrite(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status)
+            {
+                Log.d(TAG, "onDescriptorWrite() - " + descriptor.getUuid() + " on characteristic " + descriptor.getCharacteristic().getUuid() + " status " + status);
+
+                doNextAction();
+            }
+
+            @Override
+            public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic)
+            {
+                Log.d(TAG, "onCharacteristicChanged() - " + characteristic.getUuid());
+
+                processData(characteristic);
+
+                //doNextAction();
+            }
+
+            @Override
+            public void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status)
+            {
+                Log.d(TAG, "onCharacteristicWrite() - " + characteristic.getUuid() + " status " + status);
+
+                doNextAction();
+            }
+
+            @Override
+            public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status)
+            {
+
+                Log.d(TAG, "onCharacteristicRead() - " + characteristic.getUuid() + " status " + status);
+
+                doNextAction();
+            }
+        };
+
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR2)
+    private void doNextAction()
+    {
+        BluetoothGattService service = null;
+        BluetoothGattCharacteristic characteristic = null;
+        BluetoothGattDescriptor descriptor = null;
+        boolean processed = false;
+
+        //if there is something to write, do it!
+        do
+        {
+            if (mustStorePassword)
+            {
+                this.writeActionProgress("Paring process terminated");
+                Log.d(TAG, "doNextAction() - Paring process terminated, must store passwordScale");
+
+                mustStorePassword = false;
+                this.savePassword(passwordScale);
+                processTerminated = true;
+
+                runOnUiThread(new Runnable()
+                {
+                    @Override
+                    public void run()
+                    {
+                        Toast.makeText(getApplicationContext(), "dispositivo associato", Toast.LENGTH_SHORT).show();
+
+                    }
+                });
+
+                setResult(Activity.RESULT_OK);
+                finish();
+            }
+
+            if (communicationActionQueue.size() > 0)
+            {
+                BLECommunicationObject object = communicationActionQueue.element();
+                if (object != null)
+                {
+                    service = gatt.getService(SCALE_SERVICE_UUID);
+                    if (service != null)
+                    {
+                        characteristic = service.getCharacteristic(object.getCharacteristic());
+
+                        if (characteristic != null)
+                        {
+                            descriptor = characteristic.getDescriptor(object.getDescriptor());
+
+                            if (descriptor != null || (object.getType() == BLECommunicationObject.TYPE_CHARACTERISTIC))
+                            {
+
+                                if (object.isMustEnableNotify())
+                                {
+                                    gatt.setCharacteristicNotification(characteristic, true);
+                                }
+
+                                if (object.getAction() == BLECommunicationObject.ACTION_WRITE)
+                                {
+                                    if (object.getType() == BLECommunicationObject.TYPE_DESCRIPTOR)
+                                    {
+                                        descriptor.setValue(object.getValue());
+                                        boolean status = gatt.writeDescriptor(descriptor);
+                                        Log.d(TAG, "doNextAction() - " + object.getDescription() + " " + descriptor.getUuid() + " - on characteristic " + characteristic.getUuid() + " writeDescriptor status " + status);
+                                        this.writeActionProgress(object.getDescription() + " - " + status);
+                                    }
+                                    else
+                                    {
+                                        if ((characteristic != null) && (characteristic.getUuid().equals(APP_TO_SCALE_TRANSFER_CHAR_WRITE_UUID)) && (object.getValue() != null) && (object.getValue()[0] == (byte)0x22))
+                                        {
+                                            if (!checkParing(SCALE_MODEL))
+                                            {
+                                                mustStorePassword = true;
+                                            }
+                                        }
+
+                                        characteristic.setValue(object.getValue());
+                                        characteristic.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT);
+                                        if ((characteristic.getProperties() & BluetoothGattCharacteristic.PROPERTY_WRITE) <= 0)
+                                        {
+                                            Log.d(TAG, "doNextAction() - does not have permission to send");
+                                            this.writeActionProgress(object.getDescription() + " - error: missing prermissions to send data to the device");
+                                        }
+                                        else
+                                        {
+                                            boolean status = gatt.writeCharacteristic(characteristic);
+                                            Log.d(TAG, "doNextAction() - " + object.getDescription() + " - writeCharacteristic " + characteristic.getUuid() + " status " + status);
+                                            this.writeActionProgress(object.getDescription() + " - " + status);
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    if (object.getType() == BLECommunicationObject.TYPE_DESCRIPTOR)
+                                    {
+                                        boolean status = gatt.readDescriptor(descriptor);
+                                        Log.d(TAG, "doNextAction() - " + object.getDescription() + " " + descriptor.getUuid() + " - on characteristic " + characteristic.getUuid() + " readDescriptor status " + status);
+                                        this.writeActionProgress(object.getDescription() + " - " + status);
+                                    }
+                                    else
+                                    {
+                                        boolean status = gatt.readCharacteristic(characteristic);
+                                        Log.d(TAG, "doNextAction() - " + object.getDescription() + " - readCharacteristic " + characteristic.getUuid() + " status " + status);
+                                        this.writeActionProgress(object.getDescription() + " - " + status);
+                                    }
+                                }
+                                processed = true;
+                            }
+                            else
+                            {
+                                Log.d(TAG, "doNextAction() - descriptor " + object.getDescriptor() + " for characteristic " + object.getCharacteristic() + " is null");
+                                this.writeActionProgress(object.getDescription() + " - error: descriptor " + object.getDescriptor() + " for characteristic " + object.getCharacteristic() + " is null");
+                            }
+                        }
+                        else
+                        {
+                            Log.d(TAG, "doNextAction() - characteristic " + object.getCharacteristic() + " is null");
+                            this.writeActionProgress(object.getDescription() + " - error: characteristic " + object.getCharacteristic() + " is null");
+                        }
+                    }
+                    else
+                    {
+                        Log.d(TAG, "doNextAction() - service is null");
+                        this.writeActionProgress(object.getDescription() + " - error: service is null");
+                    }
+                }
+                else
+                {
+                    Log.d(TAG, "doNextAction() - object is null");
+                    this.writeActionProgress("error: action object is null");
+                }
+                communicationActionQueue.remove();  //pop the item that we just finishing writing
+            }
+            else
+            {
+                Log.d(TAG, "doNextAction() - no more messages to process");
+
+                processed = true;
+
+                if(processTerminated)
+                {
+                    this.writeActionProgress("process completed");
+                }
+            }
+        }
+        while (!processed);
+    }
+
+    private void writeActionProgress(final String text)
+    {
+        /*
+        runOnUiThread(new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                Toast.makeText(getApplicationContext(), text, Toast.LENGTH_SHORT).show();
+
+            }
+        });
+        */
+    }
+
+    private boolean checkParing(String deviceParingId)
+    {
+        boolean result = false;
+
+        //check if an account was already connected to a specific device
+        //SharedPreferences sharedPref = ScaleConnectionActivity.this.getPreferences(Context.MODE_PRIVATE);
+        SharedPreferences sharedPref = getSharedPreferences("prefs", 0);
+        String password = sharedPref.getString("password_scale", null);
+
+        if (password != null)
+        {
+            ScaleConnectionActivity.this.passwordScale = password;
+            result = true;
+        }
+
+        return result;
+    }
+
+    private void savePassword(String password)
+    {
+        //SharedPreferences sharedPref = ScaleConnectionActivity.this.getPreferences(Context.MODE_PRIVATE);
+        SharedPreferences sharedPref = getSharedPreferences("prefs", 0);
+        SharedPreferences.Editor editor = sharedPref.edit();
+        editor.putString("password_scale", password);
+        editor.commit();
+    }
+
+    public void finishButton(View v)
+    {
+        //we close this activiry and re return to the caller one
+        setResult(Activity.RESULT_OK);
+
+        finish();
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR2)
+    private void processData(BluetoothGattCharacteristic characteristic)
+    {
+        //TRYING TO GET DATA FROM DEVICE LIKE PWD DURING PARING
+        UUID thisUUID = characteristic.getUuid();
+
+        Log.d(TAG, "processData() - characteristic uuid " + characteristic.getUuid());
+
+        if (thisUUID.equals(SCALE_TO_APP_TRANSFER_CHAR_INDICATE_UUID))
+        {
+            String parsedValue = Utils.parse(characteristic);
+
+            if (parsedValue != null)
+            {
+                String[] commandBytes = parsedValue.split("-");
+
+                if (commandBytes != null)
+                {
+                    if (commandBytes.length >= 5)
+                    {
+                        Log.d(TAG, "processData() - message command --> " + commandBytes[0]);
+                        if (commandBytes[0].compareTo("A0") == 0)
+                        {
+                            //command Password on Paring
+                            passwordScale = commandBytes[4] + commandBytes[3] + commandBytes[2] + commandBytes[1];
+
+                            if (passwordScale != null)
+                            {
+                                Log.d(TAG, "processData() - received passwordScale --> " + passwordScale);
+                                writeActionProgress("received password " + passwordScale);
+                                Log.d(TAG, "processData() - queue account id");
+                                sendAccountId(APP_TO_SCALE_TRANSFER_CHAR_WRITE_UUID);
+                            }
+
+                            doNextAction();
+                        }
+                        else if (commandBytes[0].compareTo("A1") == 0)
+                        {
+                            //command Random Number on Paring
+                            String randomNumber = commandBytes[4] + commandBytes[3] + commandBytes[2] + commandBytes[1];
+
+                            Log.d(TAG, "processData() - received random number --> " + randomNumber);
+                            writeActionProgress("received random number " + randomNumber);
+
+                            if (randomNumber != null)
+                            {
+                                //send verification code
+                                Log.d(TAG, "processData() - queue verification code");
+                                sendVerificationCode(APP_TO_SCALE_TRANSFER_CHAR_WRITE_UUID, randomNumber);
+                                Log.d(TAG, "processData() - queue time offset");
+                                sendTimeOffset(APP_TO_SCALE_TRANSFER_CHAR_WRITE_UUID);
+
+                                if (!this.checkParing(SCALE_MODEL))
+                                {
+                                    Log.d(TAG, "processData() - queue enable disconnection");
+                                    sendEnableDisconnection(APP_TO_SCALE_TRANSFER_CHAR_WRITE_UUID);
+                                }
+                            }
+
+                            doNextAction();
+                        }
+                        else
+                        {
+                            Log.d(TAG, "processData() - received an unknown command: " + commandBytes[0] + " [" + commandBytes + "]");
+                        }
+                    }
+                    else
+                    {
+                        Log.d(TAG, "processData() - message length < 5 --> " + commandBytes.length);
+                    }
+                }
+            }
+        }
+        else if (thisUUID.equals(SCALE_WEIGHT_MEASUREMENT_CHAR_INDICATE_UUID))
+        {
+            String parsedValue = Utils.parse(characteristic);
+            Log.d(TAG, "processData() - Measurement --> " + parsedValue);
+
+            ScaleData data = convertMeasureToScaleData(characteristic.getValue());
+
+            writeActionProgress("Measurement --> " + parsedValue);
+
+            if(data != null)
+            {
+                writeActionProgress("Measurement --> Scale " + data.getScale() + " (00=Kg,01=LB,10=st)");
+                writeActionProgress("Measurement --> Weight " + data.getWeight() + " Kg");
+                writeActionProgress("Measurement --> Timestamp " + data.getTimestamp());
+                writeActionProgress("Measurement --> Impedance " + data.getImpedance() + " ohm");
+                writeActionProgress("Measurement --> User Id " + data.getUserId());
+                writeActionProgress("Measurement --> Weight Status Stability " + data.getWeightStatusStability() + " (0=Unstable,1=Stable)");
+                writeActionProgress("Measurement --> Weight Status Type " + data.getWeightStatusType() + " (000=Idle,001=Processing,010=Measuring with shoes,011=Measuring with bare feet,100=Measuring Complete,101=Error)");
+            }
+            else
+            {
+                writeActionProgress("Measurement --> Unparseable value! ");
+            }
+
+            //send enable disconnect
+            sendEnableDisconnection(APP_TO_SCALE_TRANSFER_CHAR_WRITE_UUID);
+            doNextAction();
+        }
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR2)
+    public void writeDataToBel(UUID characteristic, byte[] command, String description)
+    {
+        BLECommunicationObject object = new BLECommunicationObject();
+        object.setType(BLECommunicationObject.TYPE_CHARACTERISTIC);
+        object.setAction(BLECommunicationObject.ACTION_WRITE);
+        object.setCharacteristic(characteristic);
+        object.setValue(command);
+        object.setDescription(description);
+        object.setMustEnableNotify(true);
+        communicationActionQueue.add(object);
+
+        Log.d(TAG, "writeDataToBel() - queued [" + Utils.byteArrayToHexString(command) + "] to [" + characteristic + "]");
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR2)
+    private void sendAccountId(UUID characteristic)
+    {
+        byte[] command = {(byte) 0x21, (byte) 0x4B, (byte) 0x09, (byte) 0xDF, (byte) 0x78};
+
+        this.writeDataToBel(characteristic, command, "account id");
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR2)
+    private void sendVerificationCode(UUID characteristic, String randomNumber)
+    {
+        byte[] command = new byte[5];
+        command[0] = (byte) 0x20;
+
+        String xorValue = Utils.xorHex(passwordScale, randomNumber);
+
+        byte[] xorBytes = Utils.hexStringToByteArray(xorValue);
+        if (xorBytes != null)
+        {
+            command[1] = xorBytes[3];
+            command[2] = xorBytes[2];
+            command[3] = xorBytes[1];
+            command[4] = xorBytes[0];
+        }
+
+        this.writeDataToBel(characteristic, command, "verification code");
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR2)
+    private void sendTimeOffset(UUID characteristic)
+    {
+        byte[] command = new byte[5];
+
+        long diffInMs = new Date().getTime() - Utils.getDate(2010, 1, 1, 0, 0, 0).getTime();
+
+        long diffInSec = TimeUnit.MILLISECONDS.toSeconds(diffInMs);
+
+        String hexValue = Long.toHexString(diffInSec);
+
+        hexValue = Utils.panString(hexValue, "0", 8);
+
+        byte[] date = Utils.hexStringToByteArray(hexValue);
+
+        command[0] = (byte) 0x02;
+        command[1] = date[3];
+        command[2] = date[2];
+        command[3] = date[1];
+        command[4] = date[0];
+
+        this.writeDataToBel(characteristic, command, "time offset");
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR2)
+    private void sendEnableDisconnection(UUID characteristic)
+    {
+        byte[] command = new byte[5];
+        command[0] = (byte) 0x22;
+        command[1] = (byte) 0x00;
+        command[2] = (byte) 0x00;
+        command[3] = (byte) 0x00;
+        command[4] = (byte) 0x00;
+
+        this.writeDataToBel(characteristic, command, "enable disconnection");
+    }
+
+    private ScaleData convertMeasureToScaleData(byte[] measure)
+    {
+        String inputHex = null;
+        ScaleData data = null;
+
+        if(measure != null)
+        {
+            data = new ScaleData();
+
+            //scale
+            inputHex = "" + Utils.getBit((byte)measure[0], 5) + "" + Utils.getBit((byte)measure[0], 6);
+            data.setScale(Integer.parseInt(inputHex, 16));
+            //TODO: if is 1, must convert from Kg to LB, if is 10 from Kg to st
+
+            //weight
+            byte[] weightBytes = new byte[3];
+            weightBytes[0] = measure[3];
+            weightBytes[1] = measure[2];
+            weightBytes[2] = measure[1];
+
+            inputHex = Utils.byteArrayToHexString(weightBytes);
+
+            int firstPart = Integer.parseInt(inputHex, 16);
+            inputHex = "" + (byte)(measure[4] + 1);
+            int secondPart = Integer.parseInt(inputHex, 16);
+            data.setWeight((firstPart * 10 ^(-(~ secondPart))) / 1000.0);
+
+            //timestamp
+            byte[] timeBytes = new byte[4];
+            timeBytes[0] = measure[8];
+            timeBytes[1] = measure[7];
+            timeBytes[2] = measure[6];
+            timeBytes[3] = measure[5];
+
+            inputHex = Utils.byteArrayToHexString(timeBytes);
+
+            long seconds = Long.parseLong(inputHex, 16);
+            long dateInMs = Utils.getDate(2010, 1, 1, 0, 0, 0).getTime() + (seconds * 1000);
+            Date timestamp = new Date();
+            timestamp.setTime(dateInMs);
+            data.setTimestamp(timestamp);
+
+            //impedance
+            byte[] impedanceBytes = new byte[3];
+            impedanceBytes[0] = measure[15];
+            impedanceBytes[1] = measure[14];
+            impedanceBytes[2] = measure[13];
+
+            inputHex = Utils.byteArrayToHexString(impedanceBytes);
+            firstPart = Integer.parseInt(inputHex, 16);
+
+            inputHex = "" + (byte)(measure[16] + 1);
+            secondPart = Integer.parseInt(inputHex, 16);
+
+            data.setImpedance(firstPart * 10 ^(-(~ secondPart)));
+
+            //user id
+            inputHex = "" + (byte)measure[17];
+            data.setUserId(Integer.parseInt(inputHex, 16));
+
+            //weight status stability
+            inputHex = "" + Utils.getBit((byte)measure[18], 0);
+            data.setWeightStatusStability(Integer.parseInt(inputHex, 16));
+
+            //weight status type
+            inputHex = "" + Utils.getBit((byte)measure[18], 3) + "" + Utils.getBit((byte)measure[18], 2) + "" + Utils.getBit((byte)measure[18], 1);
+            data.setWeightStatusType(inputHex);
+        }
+
+        return data;
+    }
+}

@@ -1,0 +1,215 @@
+package com.neperiagroup.happysalus;
+
+import android.content.SharedPreferences;
+import android.preference.PreferenceManager;
+import android.util.Log;
+
+import com.htsmart.wristband.WristbandApplication;
+import com.htsmart.wristband.bean.config.NotificationConfig;
+import com.neperiagroup.happysalus.bean.User;
+import com.neperiagroup.happysalus.utility.StoreInMemory;
+import com.neperiagroup.happysalus.utility.TagUser;
+
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Locale;
+
+import cn.imengya.bluetoothle.connector.TryTimeStrategy;
+
+/**
+ * Created by Kilnn on 16-10-5.
+ */
+public class MyApplication extends WristbandApplication {
+
+    private static MyApplication INSTANCE;
+    private User mFakeUser;
+    private StoreInMemory storeInMemory;
+    private TagUser tagUser;
+    private SharedPreferences mSharedPreferences;
+    private int hrConnectionNumbers;
+    private int oxygenConnectionNumbers;
+    private int blodPressorConnectionNumbers;
+    private int respiratoryConnectionNumbers;
+    private int ecgConnectionNumbers;
+    private int realTimeConnection;
+
+
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        INSTANCE = this;
+        mSharedPreferences = PreferenceManager.getDefaultSharedPreferences(INSTANCE);
+        storeInMemory = new StoreInMemory(getApplicationContext());
+        tagUser = new TagUser();
+        initUser();
+
+        WristbandApplication.setDebugEnable(true);
+        WristbandApplication.getDeviceScanner().setScanPeriods(15 * 1000);
+        WristbandApplication.getDeviceConnector().setTryTimeStrategy(new TryTimeStrategy() {
+            @Override
+            public int nextTryTimes(int i) {
+                return 1000;
+            }
+        });
+        hrConnectionNumbers=0;
+        oxygenConnectionNumbers=0;
+        blodPressorConnectionNumbers=0;
+        respiratoryConnectionNumbers=0;
+        ecgConnectionNumbers=0;
+        realTimeConnection=0;
+
+    }
+
+    private void initUser() {
+        mFakeUser = new User();
+        mFakeUser = storeInMemory.getUser(1);
+        try {
+            mFakeUser.setWristbandBirthday(new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).parse("1990-01-01"));
+        } catch (ParseException e) {
+            e.printStackTrace();
+        }
+        mFakeUser.setWearLeft(true);
+    }
+
+    private NotificationConfig mNotificationConfig;
+
+    private void loadConfig() {
+        String value = mSharedPreferences.getString("NotificationConfig", "");
+        mNotificationConfig = new NotificationConfig(value.getBytes());
+    }
+
+    public void setNotificationConfig(NotificationConfig config) {
+        mSharedPreferences.edit().putString("NotificationConfig", new String(config.getBytes())).apply();
+        mNotificationConfig = config;
+    }
+
+    public NotificationConfig getNotificationConfig() {
+        if (mNotificationConfig == null) {
+            loadConfig();
+        }
+        return mNotificationConfig;
+    }
+
+    public static MyApplication getInstance() {
+        return INSTANCE;
+    }
+
+    public User getUser() {
+        return mFakeUser;
+    }
+
+    public boolean addHrConnection(){
+        hrConnectionNumbers++;
+        realTimeConnection++;
+        Log.i("-------addHR-------",String.valueOf(hrConnectionNumbers));
+        if(hrConnectionNumbers>1){
+            return false;
+        }
+        else {
+            return true;
+        }
+    }
+
+    public boolean addOxygenConnection(){
+        oxygenConnectionNumbers++;
+        realTimeConnection++;
+        if(oxygenConnectionNumbers>1){
+            return false;
+        }else{
+            return  true;
+        }
+    }
+
+    public boolean addBlodPressorConnection(){
+        blodPressorConnectionNumbers++;
+        realTimeConnection++;
+        if(blodPressorConnectionNumbers>1){
+            return false;
+        }else{
+            return true;
+        }
+    }
+
+    public boolean addRespiratoryConnection(){
+        respiratoryConnectionNumbers++;
+        realTimeConnection++;
+        if(respiratoryConnectionNumbers>1){
+            return false;
+        }else{
+            return true;
+        }
+    }
+
+    public boolean addEcgConnection(){
+        ecgConnectionNumbers++;
+        realTimeConnection++;
+        if(ecgConnectionNumbers>1){
+            return false;
+        }else{
+            return true;
+        }
+    }
+
+    public boolean removeHrConnection(){
+        hrConnectionNumbers--;
+        realTimeConnection--;
+        Log.i("-------removeHR-------",String.valueOf(hrConnectionNumbers));
+        if(hrConnectionNumbers==0){
+            return true;
+        }
+        else{
+            return false;
+        }
+    }
+
+    public boolean removeOxygenConnection(){
+        oxygenConnectionNumbers--;
+        realTimeConnection--;
+        if(oxygenConnectionNumbers==0){
+            return true;
+        }else{
+            return false;
+        }
+    }
+
+    public boolean removeBlodPressorConnection(){
+        blodPressorConnectionNumbers--;
+        realTimeConnection--;
+        if(blodPressorConnectionNumbers==0){
+            return true;
+        }
+        else{
+            return false;
+        }
+    }
+
+    public boolean removeRespiratoryConnection(){
+        respiratoryConnectionNumbers--;
+        realTimeConnection--;
+        if(respiratoryConnectionNumbers==0){
+            return true;
+        }
+        else{
+            return false;
+        }
+    }
+
+    public boolean removeEcgConnection(){
+        ecgConnectionNumbers--;
+        realTimeConnection--;
+        if(ecgConnectionNumbers==0){
+            return true;
+        }
+        else{
+            return false;
+        }
+    }
+    public boolean realtimeConnectionClose(){
+        if(realTimeConnection==0){
+            return true;
+        }else{
+            return false;
+        }
+    }
+}

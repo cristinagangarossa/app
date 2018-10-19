@@ -1,0 +1,570 @@
+package com.neperiagroup.happysalus;
+
+import android.annotation.TargetApi;
+import android.content.Context;
+import android.content.Intent;
+import android.graphics.Color;
+import android.os.Build;
+import android.os.Bundle;
+import android.support.annotation.RequiresApi;
+import android.support.design.widget.TabLayout;
+import android.support.v7.app.AppCompatActivity;
+import android.support.v7.widget.Toolbar;
+import android.util.Log;
+import android.view.Menu;
+import android.view.MenuItem;
+import android.view.View;
+import android.widget.Button;
+import android.widget.HorizontalScrollView;
+import android.widget.ListView;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import com.github.mikephil.charting.charts.PieChart;
+import com.github.mikephil.charting.data.PieData;
+import com.github.mikephil.charting.data.PieDataSet;
+import com.github.mikephil.charting.data.PieEntry;
+import com.htsmart.wristband.WristbandApplication;
+import com.htsmart.wristband.bean.WristbandConfig;
+import com.htsmart.wristband.bean.WristbandVersion;
+import com.htsmart.wristband.performer.IDevicePerformer;
+import com.htsmart.wristband.performer.SimplePerformerListener;
+import com.neperiagroup.happysalus.adapters.WeekDataAdapter;
+import com.neperiagroup.happysalus.bean.DataDevice;
+import com.neperiagroup.happysalus.bean.OxygenDayData;
+import com.neperiagroup.happysalus.bean.PresDayData;
+import com.neperiagroup.happysalus.bean.PressData;
+import com.neperiagroup.happysalus.bean.PressSaveDataBean;
+import com.neperiagroup.happysalus.bean.WeekData;
+import com.neperiagroup.happysalus.services.FileMamoryService;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+public class PressureStatsActivity extends AppCompatActivity {
+    private static final String TAG = PressureStatsActivity.class.getName();
+    private static final String DEVICE_DATA_KEY = TAG + ".device_data";
+    private static final String DEVICE_NAME_KEY = TAG + ".device_name";
+
+    private Toolbar toolbar;
+    private TextView toolbarTitle;
+
+    private String deviceName;
+    private DataDevice deviceData;
+
+    private TextView minHg;
+    private TextView maxHg;
+
+    private ListView weeksDataList;
+    private IDevicePerformer mDevicePerformer = WristbandApplication.getDevicePerformer();
+
+    private FileMamoryService fileMamoryService;
+
+    List<PieEntry> entriesMax = new ArrayList<>();
+    List<PieEntry> entriesMin = new ArrayList<>();
+
+    PieChart chartMax;
+    PieChart chartMin;
+
+    Button lun;
+    Button mart;
+    Button mer;
+    Button gio;
+    Button ven;
+    Button sab;
+    Button dom;
+
+    private int min;
+    private int max;
+    private Button readButton;
+    private HorizontalScrollView monthScroll;
+    private HorizontalScrollView weekScroll;
+    private Map<Integer,PressData> PressWeek;
+
+    @RequiresApi(api = Build.VERSION_CODES.N)
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_press_stats);
+
+        fileMamoryService = new FileMamoryService(getApplicationContext());
+
+        //deserialize device object.
+        deviceData = (DataDevice) getIntent().getSerializableExtra(DEVICE_DATA_KEY);
+        deviceName = getIntent().getStringExtra(DEVICE_NAME_KEY);
+
+        //stats toolbar setup.
+        toolbar = findViewById(R.id.statsToolbar);
+        setSupportActionBar(toolbar);
+        getSupportActionBar().setDisplayShowTitleEnabled(false);
+        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+        toolbarTitle = findViewById(R.id.stats_toolbar_title);
+        toolbarTitle.setText(deviceName);
+
+        //maxHg = findViewById(R.id.minValue);
+        //minHg = findViewById(R.id.maxValue);
+
+        mDevicePerformer.addPerformerListener(mPerformerListener);
+        mDevicePerformer.cmd_requestWristbandConfig();
+        mDevicePerformer.openHealthyRealTimeData(IDevicePerformer.HEALTHY_TYPE_BLOOD_PRESSURE);
+
+        weeksDataList=findViewById(R.id.listWeekData);
+
+        WeekDataAdapter weekDataAdapter=new WeekDataAdapter(getApplicationContext(),getWeeks());
+        weeksDataList.setAdapter(weekDataAdapter);
+
+        chartMax = findViewById(R.id.systolicChart);
+        chartMin = findViewById(R.id.dyastolic_chart);
+
+        monthScroll = findViewById(R.id.horizontalScrollMonthPr);
+        monthScroll.setVisibility(View.INVISIBLE);
+        weekScroll = findViewById(R.id.horizontalScrollWeekPr);
+        weekScroll.setVisibility(View.INVISIBLE);
+
+        initLastValuesPress();
+
+        paintPieChartMax(max);
+        paintPieChartMin(min);
+
+        readButton=(Button) findViewById(R.id.read_button);
+        readButton.setOnClickListener( new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                startActivity(PressReadActivity.getIstanceIntent(getApplicationContext(), deviceName));
+            }
+        });
+        getWeekBarValue();
+
+        lun = findViewById(R.id.Lun);
+        lun.setOnClickListener(new Button.OnClickListener() {
+            public void onClick(View v) {
+                if(PressWeek.containsKey(Calendar.MONDAY)){
+                    PressData pressData=PressWeek.get(Calendar.MONDAY);
+                    updatePressChart(pressData.getMin(),pressData.getMax());
+                }else{
+                    updatePressChart(0,0);
+                }
+
+            }
+        });
+        mart=findViewById(R.id.Mart);
+        mart.setOnClickListener(new Button.OnClickListener() {
+            public void onClick(View v) {
+                if(PressWeek.containsKey(Calendar.TUESDAY)){
+                    PressData pressData=PressWeek.get(Calendar.TUESDAY);
+                    updatePressChart(pressData.getMin(),pressData.getMax());
+                }else{
+                    updatePressChart(0,0);
+                }
+            }
+        });
+        mer = findViewById(R.id.Mer);
+        mer.setOnClickListener(new Button.OnClickListener() {
+            public void onClick(View v) {
+                if(PressWeek.containsKey(Calendar.WEDNESDAY)){
+                    PressData pressData=PressWeek.get(Calendar.WEDNESDAY);
+                    updatePressChart(pressData.getMin(),pressData.getMax());
+                }else{
+                    updatePressChart(0,0);
+                }
+            }
+        });
+        gio =findViewById(R.id.Gio);
+        gio.setOnClickListener(new Button.OnClickListener() {
+            public void onClick(View v) {
+                if(PressWeek.containsKey(Calendar.THURSDAY)){
+                    PressData pressData=PressWeek.get(Calendar.THURSDAY);
+                    updatePressChart(pressData.getMin(),pressData.getMax());
+                }else{
+                    updatePressChart(0,0);
+                }
+            }
+        });
+        ven =findViewById(R.id.Ven);
+        ven.setOnClickListener(new Button.OnClickListener() {
+            public void onClick(View v) {
+                if(PressWeek.containsKey(Calendar.FRIDAY)){
+                    PressData pressData=PressWeek.get(Calendar.FRIDAY);
+                    updatePressChart(pressData.getMin(),pressData.getMax());
+                }else{
+                    updatePressChart(0,0);
+                }
+            }
+        });
+        sab =findViewById(R.id.Sab);
+        sab.setOnClickListener(new Button.OnClickListener() {
+            public void onClick(View v) {
+                if(PressWeek.containsKey(Calendar.SATURDAY)){
+                    PressData pressData=PressWeek.get(Calendar.SATURDAY);
+                    updatePressChart(pressData.getMin(),pressData.getMax());
+                }else{
+                    updatePressChart(0,0);
+
+                }
+            }
+        });
+        dom =findViewById(R.id.Dom);
+        dom.setOnClickListener(new Button.OnClickListener() {
+            public void onClick(View v) {
+                if(PressWeek.containsKey(Calendar.SUNDAY)){
+                    PressData pressData=PressWeek.get(Calendar.SUNDAY);
+                    updatePressChart(pressData.getMin(),pressData.getMax());
+                }else{
+                    updatePressChart(0,0);
+                }            }
+        });
+
+        TabLayout tabLayout = findViewById(R.id.tabPressure);
+        tabLayout.addOnTabSelectedListener(new TabLayout.OnTabSelectedListener() {
+            @Override
+            public void onTabSelected(TabLayout.Tab tab) {
+                //do stuff here
+
+                switch (tab.getPosition()){
+                    case 0:
+                        Toast.makeText(getApplicationContext(), "today", Toast.LENGTH_LONG).show();
+                        changeToToday();
+                        weekScroll.setVisibility(View.INVISIBLE);
+                        monthScroll.setVisibility(View.INVISIBLE);
+                        updatePressChart(min,max);
+                        break;
+                    case 1:
+                        Toast.makeText(getApplicationContext(), "week", Toast.LENGTH_LONG).show();
+                        changeToWeek();
+                        weekScroll.setVisibility(View.VISIBLE);
+                        monthScroll.setVisibility(View.INVISIBLE);
+                        break;
+                    case 2:
+                        Toast.makeText(getApplicationContext(), "month", Toast.LENGTH_LONG).show();
+                        changeToMonth();
+                        weekScroll.setVisibility(View.INVISIBLE);
+                        monthScroll.setVisibility(View.VISIBLE);
+                        break;
+
+                }
+
+            }
+
+            @Override
+            public void onTabUnselected(TabLayout.Tab tab) {
+
+            }
+
+            @Override
+            public void onTabReselected(TabLayout.Tab tab) {
+
+            }
+        });
+
+    }
+
+    private void initLastValuesPress(){
+        List<PressSaveDataBean> listSaveDataBeanPressure = new ArrayList<PressSaveDataBean>();
+        try {
+            listSaveDataBeanPressure = fileMamoryService.getPressDayData(Calendar.getInstance().getTime());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        if(listSaveDataBeanPressure!=null && listSaveDataBeanPressure.size()!=0){
+            max = listSaveDataBeanPressure.get(listSaveDataBeanPressure.size()-1).getPressData().getMax();
+            min = listSaveDataBeanPressure.get(listSaveDataBeanPressure.size()-1).getPressData().getMin();
+        }else{
+            max = 0;
+            min = 0;
+        }
+    }
+
+    @Override
+    public boolean onSupportNavigateUp(){
+        finish();
+        return true;
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu){
+        getMenuInflater().inflate(R.menu.menu_main_activity, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item){
+        switch(item.getItemId()){
+            case R.id.settings:
+                startActivity(SettingsActivity.getIstanceIntent(getApplicationContext()));
+                break;
+        }
+
+        return super.onOptionsItemSelected(item);
+    }
+
+    public static Intent getInstanceIntent(Context context, DataDevice deviceData, String deviceName) {
+        Intent intent = new Intent(context, PressureStatsActivity.class);
+        intent.putExtra(DEVICE_DATA_KEY, deviceData);
+        intent.putExtra(DEVICE_NAME_KEY, deviceName);
+        return intent;
+    }
+
+    private SimplePerformerListener mPerformerListener = new SimplePerformerListener() {
+        @Override
+        public void onResponseWristbandConfig(WristbandConfig config) {
+            WristbandVersion version = config.getWristbandVersion();
+            if (version.isBloodPressureEnable()) {
+                //minHg.setVisibility(View.VISIBLE);
+                //maxHg.setVisibility(View.VISIBLE);
+                //mOxyValue.setText(getString(R.string.oxygen_value, 0));
+            }
+
+        }
+
+        @Override
+        public void onOpenHealthyRealTimeData(int healthyType, boolean success) {
+            if (success) {
+                switch (healthyType) {
+                    case IDevicePerformer.HEALTHY_TYPE_HEART_RATE:
+
+                        break;
+                }
+            }
+        }
+
+        @Override
+        public void onCloseHealthyRealTimeData(int healthyType) {
+            switch (healthyType) {
+                case IDevicePerformer.HEALTHY_TYPE_HEART_RATE:
+
+                    break;
+
+                case IDevicePerformer.HEALTHY_TYPE_OXYGEN:
+
+                    break;
+
+                case IDevicePerformer.HEALTHY_TYPE_BLOOD_PRESSURE:
+
+                    break;
+
+                case IDevicePerformer.HEALTHY_TYPE_RESPIRATORY_RATE:
+
+                    break;
+            }
+        }
+
+        @Override
+        public void onResultHealthyRealTimeData(int heartRate, int oxygen, int diastolicPressure, int systolicPressure, int respiratoryRate) {
+            ///if (diastolicPressure != 0) {
+                ////minHg.setText(String.valueOf(diastolicPressure));
+                //entriesMin.get(0).setY(diastolicPressure*0.8f);
+                //entriesMin.get(1).setY(100-(diastolicPressure*0.8f));
+                //chartMin.setCenterText(""+diastolicPressure);
+                //chartMin.notifyDataSetChanged();
+                //chartMin.invalidate();
+
+            //}
+            //if (systolicPressure != 0) {
+                ////maxHg.setText(String.valueOf(systolicPressure));
+                //entriesMax.get(0).setY(systolicPressure*0.5f);
+                //entriesMax.get(1).setY(100-(systolicPressure*0.5f));
+                //chartMax.setCenterText(""+systolicPressure);
+                //chartMax.notifyDataSetChanged();
+                //chartMax.invalidate();
+            //}
+
+        }
+
+
+    };
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        mDevicePerformer.removePerformerListener(mPerformerListener);
+        mDevicePerformer.closeHealthyRealTimeData(IDevicePerformer.HEALTHY_TYPE_ECG);
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.N)
+    private List<WeekData> getWeeks() {
+
+        List<WeekData> weeks=new ArrayList<WeekData>();
+        FileMamoryService fileMamoryService=new FileMamoryService(getApplicationContext());
+        try {
+            weeks=fileMamoryService.getAllWeekPressData();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return weeks;
+    }
+
+    public void paintPieChartMax(int val )
+    {
+        float proportion=0.5f;
+
+        int[] colors = new int[] {Color.argb(255,255,255,255), Color.TRANSPARENT};
+        entriesMax.add(new PieEntry(val*proportion));
+        //Log.d("percentuale ","val "+val);
+        float other = 100-(val*proportion);
+        //Log.d("percentuale ","other "+other);
+        entriesMax.add(new PieEntry(other));
+        PieDataSet set = new PieDataSet(entriesMax,null);
+        PieData data = new PieData(set);
+        set.setColors(colors);
+        data.setValueTextColor(Color.TRANSPARENT);
+        //set.setXValuePosition(PieDataSet.ValuePosition.OUTSIDE_SLICE);
+        //set.setYValuePosition(PieDataSet.ValuePosition.OUTSIDE_SLICE);
+        //PieChartRenderer chartR = new PieChartRenderer(chart,chart.getAnimator(),chart.getViewPortHandler());
+        //chart.setRenderer(chartR);
+        //chart.invalidate();
+        //temp
+        int value=(int)data.getDataSet().getEntryForIndex(0).getValue();
+        //Log.d("percentuale ","value "+value);
+        chartMax.setTransparentCircleRadius(94);
+        chartMax.setTransparentCircleColor(getResources().getColor(R.color.light));
+        chartMax.getDescription().setEnabled(false);
+        chartMax.setRotationEnabled(false);
+        chartMax.setCenterText(val+"");
+        chartMax.setCenterTextSize(20);
+        chartMax.setCenterTextColor(Color.WHITE);
+        chartMax.getLegend().setEnabled(false);
+        chartMax.getDescription().setEnabled(false);
+        chartMax.setEntryLabelColor(Color.TRANSPARENT);
+        chartMax.setDrawEntryLabels(false);
+        chartMax.setDrawHoleEnabled(true);
+        chartMax.setHoleRadius(90.0f);
+        chartMax.setHoleColor(Color.TRANSPARENT);
+        chartMax.setData(data);
+        //chart.spin( 500,0,360 - angleTo, Easing.EasingOption.EaseInOutQuad ); // rotazione del grafico
+        chartMax.animateY(1000);
+        chartMax.notifyDataSetChanged(); // let the chart know it's data changed
+        //PieChartRenderer custom= new PieChartRenderer(chart, chart.getAnimator(),chart.getViewPortHandler());
+        //chart.setRenderer(custom);
+        chartMax.invalidate(); // refresh
+
+    }
+
+    public void paintPieChartMin(int val )
+    {
+        float proportion=0.8f;
+
+        int[] colors = new int[] {Color.argb(255,255,255,255), Color.TRANSPARENT};
+        entriesMin.add(new PieEntry(val*proportion));
+        //Log.d("percentuale ","val "+val);
+        float other = 100-(val*proportion);
+        //Log.d("percentuale ","other "+other);
+        entriesMin.add(new PieEntry(other));
+        PieDataSet set = new PieDataSet(entriesMin,null);
+        PieData data = new PieData(set);
+        set.setColors(colors);
+        data.setValueTextColor(Color.TRANSPARENT);
+        //set.setXValuePosition(PieDataSet.ValuePosition.OUTSIDE_SLICE);
+        //set.setYValuePosition(PieDataSet.ValuePosition.OUTSIDE_SLICE);
+        //PieChartRenderer chartR = new PieChartRenderer(chart,chart.getAnimator(),chart.getViewPortHandler());
+        //chart.setRenderer(chartR);
+        //chart.invalidate();
+        //temp
+        int value=(int)data.getDataSet().getEntryForIndex(0).getValue();
+        //Log.d("percentuale ","value "+value);
+        chartMin.setTransparentCircleRadius(94);
+        chartMin.setTransparentCircleColor(getResources().getColor(R.color.light));
+        chartMin.getDescription().setEnabled(false);
+        chartMin.setRotationEnabled(false);
+        chartMin.setCenterText(val+"");
+        chartMin.setCenterTextSize(20);
+        chartMin.setCenterTextColor(Color.WHITE);
+        chartMin.getLegend().setEnabled(false);
+        chartMin.getDescription().setEnabled(false);
+        chartMin.setEntryLabelColor(Color.TRANSPARENT);
+        chartMin.setDrawEntryLabels(false);
+        chartMin.setDrawHoleEnabled(true);
+        chartMin.setHoleRadius(90.0f);
+        chartMin.setHoleColor(Color.TRANSPARENT);
+        chartMin.setData(data);
+        //chart.spin( 500,0,360 - angleTo, Easing.EasingOption.EaseInOutQuad ); // rotazione del grafico
+        chartMin.animateY(1000);
+        chartMin.notifyDataSetChanged(); // let the chart know it's data changed
+        //PieChartRenderer custom= new PieChartRenderer(chart, chart.getAnimator(),chart.getViewPortHandler());
+        //chart.setRenderer(custom);
+        chartMin.invalidate(); // refresh
+
+    }
+
+    private void changeToToday(){
+        //TODO
+    }
+    private void changeToWeek(){
+        //TODO
+    }
+    private void changeToMonth(){
+        //TODO
+    }
+
+    @TargetApi(Build.VERSION_CODES.N)
+    @RequiresApi(api = Build.VERSION_CODES.N)
+    @Override
+    protected void onResume() {
+        super.onResume();
+        initLastValuesPress();
+        WeekDataAdapter weekDataAdapter=new WeekDataAdapter(getApplicationContext(),getWeeks());
+        weeksDataList.setAdapter(weekDataAdapter);
+        if (min != 0 && max != 0) {
+            entriesMin.get(0).setY(min*0.8f);
+            entriesMin.get(1).setY(100-(min*0.8f));
+            chartMin.setCenterText(""+min);
+            chartMin.notifyDataSetChanged();
+            chartMin.invalidate();
+
+            entriesMax.get(0).setY(max*0.5f);
+            entriesMax.get(1).setY(100-(max*0.5f));
+            chartMax.setCenterText(""+max);
+            chartMax.notifyDataSetChanged();
+            chartMax.invalidate();
+
+        }
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.N)
+    private void getWeekBarValue(){
+
+        List<WeekData> weeks=new ArrayList<>();
+        try {
+            weeks=fileMamoryService.getAllWeekPressData();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        Map<Integer,PressData> values=new HashMap<>();
+        if(weeks!=null && weeks.size()>0){
+            if(weeks.get(0).getWeek()=="Questa settimana"){
+                List<PresDayData> days=weeks.get(0).getDays();
+                for(PresDayData day : days){
+                    Calendar c=Calendar.getInstance();
+                    c.setTime(day.getDate());
+                    int dayNumber=c.get(Calendar.DAY_OF_WEEK);
+                    PressData pressData=new PressData();
+                    pressData.setMin(Integer.valueOf(day.getPressMin()));
+                    pressData.setMax(Integer.valueOf(day.getPresMax()));
+                    values.put(dayNumber,pressData);
+                }
+            }
+        }
+        PressWeek=values;
+    }
+
+    private void updatePressChart(int min, int max){
+        entriesMin.get(0).setY(min*0.8f);
+        entriesMin.get(1).setY(100-(min*0.8f));
+        chartMin.setCenterText(""+min);
+        chartMin.animateY(1000);
+        chartMin.notifyDataSetChanged();
+        chartMin.invalidate();
+
+        entriesMax.get(0).setY(max*0.5f);
+        entriesMax.get(1).setY(100-(max*0.5f));
+        chartMax.setCenterText(""+max);
+        chartMin.animateY(1000);
+        chartMax.notifyDataSetChanged();
+        chartMax.invalidate();
+    }
+}

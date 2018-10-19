@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <group android:checkableBehavior="single">
+        <item android:id="@+id/config" android:title="Configurazioni"/>
+        <item android:id="@+id/smartband" android:title="Smartband IP68"/>
+        <item android:id="@+id/balance" android:title="Bilancia"/>
+        <item android:id="@+id/ecg" android:title="ECG D-Heart"/>
+        <item android:id="@+id/pressure" android:title="Sfigmomanometro"/>
+        <item android:id="@+id/safe" android:title="Safe Drive"/>
+    </group>
+</menu>

@@ -1,0 +1,409 @@
+package com.neperiagroup.happysalus;
+
+import android.content.Context;
+import android.content.Intent;
+import android.graphics.Color;
+import android.os.Build;
+import android.os.Bundle;
+import android.support.annotation.RequiresApi;
+import android.support.v7.app.AppCompatActivity;
+import android.support.v7.widget.Toolbar;
+import android.view.Menu;
+import android.view.MenuItem;
+import android.view.View;
+import android.widget.Button;
+import android.widget.HorizontalScrollView;
+import android.widget.ListView;
+import android.widget.TextView;
+
+import com.github.mikephil.charting.charts.PieChart;
+import com.github.mikephil.charting.data.PieData;
+import com.github.mikephil.charting.data.PieDataSet;
+import com.github.mikephil.charting.data.PieEntry;
+import com.htsmart.wristband.WristbandApplication;
+import com.htsmart.wristband.bean.WristbandConfig;
+import com.htsmart.wristband.bean.WristbandVersion;
+import com.htsmart.wristband.performer.IDevicePerformer;
+import com.htsmart.wristband.performer.SimplePerformerListener;
+import com.neperiagroup.happysalus.adapters.WeekDataAdapter;
+import com.neperiagroup.happysalus.bean.BreathDayData;
+import com.neperiagroup.happysalus.bean.DataDevice;
+import com.neperiagroup.happysalus.bean.GenericDayData;
+import com.neperiagroup.happysalus.bean.PresDayData;
+import com.neperiagroup.happysalus.bean.WeekData;
+import com.neperiagroup.happysalus.services.FileMamoryService;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+
+public class BreatheFreqStatsActivity extends AppCompatActivity{
+    private static final String TAG = BreatheFreqStatsActivity.class.getName();
+    private static final String DEVICE_DATA_KEY = TAG + ".device_data";
+    private static final String DEVICE_NAME_KEY = TAG + ".device_name";
+
+    private Toolbar toolbar;
+    private TextView toolbarTitle;
+
+    private String deviceName;
+    private DataDevice deviceData;
+
+    private TextView actValue;
+    private TextView minValueText;
+    private TextView maxValueText;
+    private ListView weeksDataList;
+
+
+
+
+    private int lastValue;
+    private int minValue;
+    private int maxValue;
+
+    PieChart chartActual;
+    PieChart chartMax;
+    PieChart chartMin;
+    List<PieEntry> entriesActual = new ArrayList<>();
+    List<PieEntry> entriesMax = new ArrayList<>();
+    List<PieEntry> entriesMin = new ArrayList<>();
+
+    Button readButton;
+    HorizontalScrollView monthScroll;
+    HorizontalScrollView weekScroll;
+
+
+    private IDevicePerformer mDevicePerformer = WristbandApplication.getDevicePerformer();
+
+    @RequiresApi(api = Build.VERSION_CODES.N)
+    @Override
+    protected void onCreate(Bundle savedInstanceState){
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_breathe_freq);
+
+        //deserialize device object.
+        deviceData = (DataDevice) getIntent().getSerializableExtra(DEVICE_DATA_KEY);
+        deviceName = getIntent().getStringExtra(DEVICE_NAME_KEY);
+
+        //stats toolbar setup.
+        toolbar = findViewById(R.id.statsToolbar);
+        setSupportActionBar(toolbar);
+        getSupportActionBar().setDisplayShowTitleEnabled(false);
+        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+        toolbarTitle = findViewById(R.id.stats_toolbar_title);
+        toolbarTitle.setText(deviceName);
+
+        //actValue=findViewById(R.id.actValue);
+        //minValueText=findViewById(R.id.minValue);
+        //maxValueText=findViewById(R.id.maxValue);
+
+        mDevicePerformer.addPerformerListener(mPerformerListener);
+        mDevicePerformer.cmd_requestWristbandConfig();
+        mDevicePerformer.openHealthyRealTimeData(IDevicePerformer.HEALTHY_TYPE_RESPIRATORY_RATE);
+
+        weekScroll= findViewById(R.id.horizontalScrollWeekBr);
+        weekScroll.setVisibility(View.INVISIBLE);
+        monthScroll= findViewById(R.id.horizontalScrollMonthBr);
+        monthScroll.setVisibility(View.INVISIBLE);
+        //TODO read from memory
+        minValue=15;
+        maxValue=15;
+        lastValue=15;
+        chartActual = findViewById(R.id.currentChart);
+        chartMax = findViewById(R.id.maxChart);
+        chartMin = findViewById(R.id.minChart);
+        paintPieChartActual(lastValue);
+        paintPieChartMin(minValue);
+        paintPieChartMax(maxValue);
+
+        weeksDataList=findViewById(R.id.listWeekData);
+
+        WeekDataAdapter weekDataAdapter=new WeekDataAdapter(getApplicationContext(),getWeeks());
+        weeksDataList.setAdapter(weekDataAdapter);
+
+        readButton=(Button) findViewById(R.id.read_button);
+        readButton.setOnClickListener( new View.OnClickListener() {
+
+            @Override
+            public void onClick(View v) {
+                Intent intentMain = new Intent(BreatheFreqStatsActivity.this ,
+                        BreathFreqReadActivity.class);
+                BreatheFreqStatsActivity.this.startActivity(intentMain);
+
+            }
+        });
+
+    }
+
+    @Override
+    public boolean onSupportNavigateUp(){
+        finish();
+        return true;
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu){
+        getMenuInflater().inflate(R.menu.menu_main_activity, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item){
+//        switch(item.getItemId()){
+//            case R.id.settings:
+//                startActivity(SettingsActivity.getInstanceIntent(getApplicationContext()));
+//                return true;
+//        }
+        return super.onOptionsItemSelected(item);
+    }
+
+    public static Intent getInstanceIntent(Context context, DataDevice deviceData, String deviceName){
+        Intent intent = new Intent(context, BreatheFreqStatsActivity.class);
+        intent.putExtra(DEVICE_DATA_KEY, deviceData);
+        intent.putExtra(DEVICE_NAME_KEY, deviceName);
+        return intent;
+    }
+
+    private SimplePerformerListener mPerformerListener = new SimplePerformerListener() {
+        @Override
+        public void onResponseWristbandConfig(WristbandConfig config) {
+            WristbandVersion version = config.getWristbandVersion();
+            if (version.isBloodPressureEnable()) {
+
+                //actValue.setVisibility(View.VISIBLE);
+
+                //mOxyValue.setText(getString(R.string.oxygen_value, 0));
+            }
+
+        }
+
+        @Override
+        public void onOpenHealthyRealTimeData(int healthyType, boolean success) {
+            if (success) {
+                switch (healthyType) {
+                    case IDevicePerformer.HEALTHY_TYPE_HEART_RATE:
+
+                        break;
+                }
+            }
+        }
+
+        @Override
+        public void onCloseHealthyRealTimeData(int healthyType) {
+            switch (healthyType) {
+                case IDevicePerformer.HEALTHY_TYPE_HEART_RATE:
+
+                    break;
+
+                case IDevicePerformer.HEALTHY_TYPE_OXYGEN:
+
+                    break;
+
+                case IDevicePerformer.HEALTHY_TYPE_BLOOD_PRESSURE:
+
+                    break;
+
+                case IDevicePerformer.HEALTHY_TYPE_RESPIRATORY_RATE:
+
+                    break;
+            }
+        }
+
+        @Override
+        public void onResultHealthyRealTimeData(int heartRate, int oxygen, int diastolicPressure, int systolicPressure, int respiratoryRate) {
+            if (respiratoryRate != 0) {
+                // actValue.setText(String.valueOf(respiratoryRate));
+                entriesActual.get(0).setY(respiratoryRate*2);
+                entriesActual.get(1).setY(100-(respiratoryRate*2));
+                chartActual.setCenterText(respiratoryRate+"");
+                chartActual.notifyDataSetChanged();
+                chartActual.invalidate(); // refresh
+
+                if(respiratoryRate<minValue){
+                    minValue=respiratoryRate;
+                    //minValueText.setText(String.valueOf(respiratoryRate));
+                    entriesMin.get(0).setY(respiratoryRate*2);
+                    entriesMin.get(1).setY(100-(respiratoryRate*2));
+                    chartMin.setCenterText(respiratoryRate+"");
+                    chartMin.notifyDataSetChanged();
+                    chartMin.invalidate(); // refresh
+                }
+                if(respiratoryRate>maxValue){
+                    maxValue=respiratoryRate;
+                    //maxValueText.setText(String.valueOf(respiratoryRate));
+                    entriesMax.get(0).setY(respiratoryRate*2);
+                    entriesMax.get(1).setY(100-(respiratoryRate*2));
+                    chartMax.setCenterText(respiratoryRate+"");
+                    chartMax.notifyDataSetChanged();
+                    chartMax.invalidate(); // refresh
+                }
+
+            }
+
+
+        }
+
+
+    };
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        mDevicePerformer.removePerformerListener(mPerformerListener);
+        mDevicePerformer.closeHealthyRealTimeData(IDevicePerformer.HEALTHY_TYPE_RESPIRATORY_RATE);
+    }
+
+
+    public void paintPieChartActual(int val )
+        {
+            int proportion=2;
+            int[] colors = new int[] {Color.argb(255,255,255,255), Color.TRANSPARENT};
+            entriesActual.add(new PieEntry(val*proportion));
+            //Log.d("percentuale ","val "+val);
+            float other = 100-(val*proportion);
+            //Log.d("percentuale ","other "+other);
+            entriesActual.add(new PieEntry(other));
+            PieDataSet set = new PieDataSet(entriesActual,null);
+            PieData data = new PieData(set);
+            set.setColors(colors);
+            data.setValueTextColor(Color.TRANSPARENT);
+            //set.setXValuePosition(PieDataSet.ValuePosition.OUTSIDE_SLICE);
+            //set.setYValuePosition(PieDataSet.ValuePosition.OUTSIDE_SLICE);
+            //PieChartRenderer chartR = new PieChartRenderer(chart,chart.getAnimator(),chart.getViewPortHandler());
+        //chart.setRenderer(chartR);
+        //chart.invalidate();
+        //temp
+        int value=(int)data.getDataSet().getEntryForIndex(0).getValue();
+        //Log.d("percentuale ","value "+value);
+        chartActual.setTransparentCircleRadius(94);
+        chartActual.setTransparentCircleColor(getResources().getColor(R.color.light));
+        chartActual.getDescription().setEnabled(false);
+        chartActual.setRotationEnabled(false);
+        chartActual.setCenterText(val+"");
+        chartActual.setCenterTextSize(20);
+        chartActual.setCenterTextColor(Color.WHITE);
+        chartActual.getLegend().setEnabled(false);
+        chartActual.getDescription().setEnabled(false);
+        chartActual.setEntryLabelColor(Color.TRANSPARENT);
+        chartActual.setDrawEntryLabels(false);
+        chartActual.setDrawHoleEnabled(true);
+        chartActual.setHoleRadius(90.0f);
+        chartActual.setHoleColor(Color.TRANSPARENT);
+        chartActual.setData(data);
+        //chart.spin( 500,0,360 - angleTo, Easing.EasingOption.EaseInOutQuad ); // rotazione del grafico
+        chartActual.animateY(1000);
+        chartActual.notifyDataSetChanged(); // let the chart know it's data changed
+        //PieChartRenderer custom= new PieChartRenderer(chart, chart.getAnimator(),chart.getViewPortHandler());
+        //chart.setRenderer(custom);
+        chartActual.invalidate(); // refresh
+
+    }
+
+    public void paintPieChartMin(int val )
+    {
+        int proportion=2;
+        int[] colors = new int[] {Color.argb(255,255,255,255), Color.TRANSPARENT};
+        entriesMin.add(new PieEntry(val*proportion));
+        //Log.d("percentuale ","val "+val);
+        float other = 100-(val*proportion);
+        //Log.d("percentuale ","other "+other);
+        entriesMin.add(new PieEntry(other));
+        PieDataSet set = new PieDataSet(entriesActual,null);
+        PieData data = new PieData(set);
+        set.setColors(colors);
+        data.setValueTextColor(Color.TRANSPARENT);
+        //set.setXValuePosition(PieDataSet.ValuePosition.OUTSIDE_SLICE);
+        //set.setYValuePosition(PieDataSet.ValuePosition.OUTSIDE_SLICE);
+        //PieChartRenderer chartR = new PieChartRenderer(chart,chart.getAnimator(),chart.getViewPortHandler());
+        //chart.setRenderer(chartR);
+        //chart.invalidate();
+        //temp
+        int value=(int)data.getDataSet().getEntryForIndex(0).getValue();
+        //Log.d("percentuale ","value "+value);
+        chartMin.setTransparentCircleRadius(94);
+        chartMin.setTransparentCircleColor(getResources().getColor(R.color.light));
+        chartMin.getDescription().setEnabled(false);
+        chartMin.setRotationEnabled(false);
+        chartMin.setCenterText(""+val);
+        chartMin.setCenterTextSize(20);
+        chartMin.setCenterTextColor(Color.WHITE);
+        chartMin.getLegend().setEnabled(false);
+        chartMin.getDescription().setEnabled(false);
+        chartMin.setEntryLabelColor(Color.TRANSPARENT);
+        chartMin.setDrawEntryLabels(false);
+        chartMin.setDrawHoleEnabled(true);
+        chartMin.setHoleRadius(90.0f);
+        chartMin.setHoleColor(Color.TRANSPARENT);
+        chartMin.setData(data);
+        //chart.spin( 500,0,360 - angleTo, Easing.EasingOption.EaseInOutQuad ); // rotazione del grafico
+        chartMin.animateY(1000);
+        chartMin.notifyDataSetChanged(); // let the chart know it's data changed
+        //PieChartRenderer custom= new PieChartRenderer(chart, chart.getAnimator(),chart.getViewPortHandler());
+        //chart.setRenderer(custom);
+        chartMin.invalidate(); // refresh
+
+    }
+
+    public void paintPieChartMax(int val )
+    {
+        int proportion=2;
+        int[] colors = new int[] {Color.argb(255,255,255,255), Color.TRANSPARENT};
+        entriesMax.add(new PieEntry(val*proportion));
+        //Log.d("percentuale ","val "+val);
+        float other = 100-(val*proportion);
+        //Log.d("percentuale ","other "+other);
+        entriesMax.add(new PieEntry(other));
+        PieDataSet set = new PieDataSet(entriesActual,null);
+        PieData data = new PieData(set);
+        set.setColors(colors);
+        data.setValueTextColor(Color.TRANSPARENT);
+        //set.setXValuePosition(PieDataSet.ValuePosition.OUTSIDE_SLICE);
+        //set.setYValuePosition(PieDataSet.ValuePosition.OUTSIDE_SLICE);
+        //PieChartRenderer chartR = new PieChartRenderer(chart,chart.getAnimator(),chart.getViewPortHandler());
+        //chart.setRenderer(chartR);
+        //chart.invalidate();
+        //temp
+        int value=(int)data.getDataSet().getEntryForIndex(0).getValue();
+        //Log.d("percentuale ","value "+value);
+        chartMax.setTransparentCircleRadius(94);
+        chartMax.setTransparentCircleColor(getResources().getColor(R.color.light));
+        chartMax.getDescription().setEnabled(false);
+        chartMax.setRotationEnabled(false);
+        chartMax.setCenterText(""+val);
+        chartMax.setCenterTextSize(20);
+        chartMax.setCenterTextColor(Color.WHITE);
+        chartMax.getLegend().setEnabled(false);
+        chartMax.getDescription().setEnabled(false);
+        chartMax.setEntryLabelColor(Color.TRANSPARENT);
+        chartMax.setDrawEntryLabels(false);
+        chartMax.setDrawHoleEnabled(true);
+        chartMax.setHoleRadius(90.0f);
+        chartMax.setHoleColor(Color.TRANSPARENT);
+        chartMax.setData(data);
+        //chart.spin( 500,0,360 - angleTo, Easing.EasingOption.EaseInOutQuad ); // rotazione del grafico
+        chartMax.animateY(1000);
+        chartMax.notifyDataSetChanged(); // let the chart know it's data changed
+        //PieChartRenderer custom= new PieChartRenderer(chart, chart.getAnimator(),chart.getViewPortHandler());
+        //chart.setRenderer(custom);
+        chartMax.invalidate(); // refresh
+
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.N)
+    private List<WeekData> getWeeks() {
+        List<WeekData> weeks=new ArrayList<WeekData>();
+        FileMamoryService fileMamoryService=new FileMamoryService(getApplicationContext());
+        try {
+            weeks=fileMamoryService.getAllWeekBrData();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return weeks;
+    }
+
+
+
+
+
+
+}

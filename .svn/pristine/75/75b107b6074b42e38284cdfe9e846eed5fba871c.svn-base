@@ -1,0 +1,326 @@
+package com.neperiagroup.happysalus;
+
+import android.app.Activity;
+import android.graphics.Color;
+import android.support.v7.app.AppCompatActivity;
+import android.os.Bundle;
+import android.util.Log;
+import android.widget.ProgressBar;
+import android.widget.TextView;
+
+import com.github.mikephil.charting.charts.PieChart;
+import com.github.mikephil.charting.data.PieData;
+import com.github.mikephil.charting.data.PieDataSet;
+import com.github.mikephil.charting.data.PieEntry;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import com.htsmart.wristband.WristbandApplication;
+import com.htsmart.wristband.bean.WristbandConfig;
+import com.htsmart.wristband.bean.WristbandVersion;
+import com.htsmart.wristband.performer.IDevicePerformer;
+import com.htsmart.wristband.performer.SimplePerformerListener;
+import com.neperiagroup.happysalus.bean.PressData;
+import com.neperiagroup.happysalus.bean.PressSaveDataBean;
+import com.neperiagroup.happysalus.bean.SaveDataBean;
+import com.neperiagroup.happysalus.services.FileMamoryService;
+
+import java.io.IOException;
+import java.lang.reflect.Type;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.List;
+
+public class PressReadActivity extends AppCompatActivity {
+
+    public static final String currentMonth="current_month";
+    private static final String TAG = PressReadActivity.class.getName();
+    private static final String DEVICE_DATA_KEY = TAG + ".device_data";
+    private static final String DEVICE_NAME_KEY = TAG + ".device_name";
+    private final String FILE_BLOOD_PRESSURE = "fileBloodPressureTot";
+
+
+    PieChart chartMin;
+    PieChart chartMax;
+
+    int actualMaxValue;
+    int actualMinValue;
+    private IDevicePerformer mDevicePerformer = WristbandApplication.getDevicePerformer();
+    private ProgressBar progressBar;
+    private FileMamoryService fileMamoryService;
+    private List<PressSaveDataBean> pressToday;
+    private Activity activity=this;
+    private TextView textLoading;
+    boolean waiting=true;
+
+    List<PieEntry> entriesMax = new ArrayList<>();
+    List<PieEntry> entriesMin = new ArrayList<>();
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_press_read);
+        actualMaxValue=0;
+        actualMinValue=0;
+        chartMax=findViewById(R.id.MaxChart);
+        chartMin=findViewById(R.id.MinChart);
+
+        mDevicePerformer.addPerformerListener(mPerformerListener);
+        mDevicePerformer.cmd_requestWristbandConfig();
+        mDevicePerformer.openHealthyRealTimeData(IDevicePerformer.HEALTHY_TYPE_BLOOD_PRESSURE);
+
+        progressBar=findViewById(R.id.determinateBar);
+        progressBar.setProgress(0);
+        fileMamoryService=new FileMamoryService(getApplicationContext());
+        readTodayData();
+        textLoading=findViewById(R.id.loading);
+        textLoading.setText("In attesa del dispositivo");
+
+        paintPieChartMax(actualMaxValue);
+        paintPieChartMin(actualMinValue);
+
+    }
+
+    public void paintPieChartMax(int val )
+    {
+        float proportion=0.5f;
+
+        int[] colors = new int[] {Color.argb(255,255,255,255), Color.TRANSPARENT};
+        entriesMax.add(new PieEntry(val*proportion));
+        //Log.d("percentuale ","val "+val);
+        float other = 100-(val*proportion);
+        //Log.d("percentuale ","other "+other);
+        entriesMax.add(new PieEntry(other));
+        PieDataSet set = new PieDataSet(entriesMax,null);
+        PieData data = new PieData(set);
+        set.setColors(colors);
+        data.setValueTextColor(Color.TRANSPARENT);
+        //set.setXValuePosition(PieDataSet.ValuePosition.OUTSIDE_SLICE);
+        //set.setYValuePosition(PieDataSet.ValuePosition.OUTSIDE_SLICE);
+        //PieChartRenderer chartR = new PieChartRenderer(chart,chart.getAnimator(),chart.getViewPortHandler());
+        //chart.setRenderer(chartR);
+        //chart.invalidate();
+        //temp
+        int value=(int)data.getDataSet().getEntryForIndex(0).getValue();
+        //Log.d("percentuale ","value "+value);
+        chartMax.setTransparentCircleRadius(94);
+        chartMax.setTransparentCircleColor(getResources().getColor(R.color.light));
+        chartMax.getDescription().setEnabled(false);
+        chartMax.setRotationEnabled(false);
+        chartMax.setCenterText(val+"");
+        chartMax.setCenterTextSize(20);
+        chartMax.setCenterTextColor(Color.WHITE);
+        chartMax.getLegend().setEnabled(false);
+        chartMax.getDescription().setEnabled(false);
+        chartMax.setEntryLabelColor(Color.TRANSPARENT);
+        chartMax.setDrawEntryLabels(false);
+        chartMax.setDrawHoleEnabled(true);
+        chartMax.setHoleRadius(90.0f);
+        chartMax.setHoleColor(Color.TRANSPARENT);
+        chartMax.setData(data);
+        //chart.spin( 500,0,360 - angleTo, Easing.EasingOption.EaseInOutQuad ); // rotazione del grafico
+        chartMax.animateY(1000);
+        chartMax.notifyDataSetChanged(); // let the chart know it's data changed
+        //PieChartRenderer custom= new PieChartRenderer(chart, chart.getAnimator(),chart.getViewPortHandler());
+        //chart.setRenderer(custom);
+        chartMax.invalidate(); // refresh
+
+    }
+
+    public void paintPieChartMin(int val )
+    {
+        float proportion=0.8f;
+
+        int[] colors = new int[] {Color.argb(255,255,255,255), Color.TRANSPARENT};
+        entriesMin.add(new PieEntry(val*proportion));
+        //Log.d("percentuale ","val "+val);
+        float other = 100-(val*proportion);
+        //Log.d("percentuale ","other "+other);
+        entriesMin.add(new PieEntry(other));
+        PieDataSet set = new PieDataSet(entriesMin,null);
+        PieData data = new PieData(set);
+        set.setColors(colors);
+        data.setValueTextColor(Color.TRANSPARENT);
+        //set.setXValuePosition(PieDataSet.ValuePosition.OUTSIDE_SLICE);
+        //set.setYValuePosition(PieDataSet.ValuePosition.OUTSIDE_SLICE);
+        //PieChartRenderer chartR = new PieChartRenderer(chart,chart.getAnimator(),chart.getViewPortHandler());
+        //chart.setRenderer(chartR);
+        //chart.invalidate();
+        //temp
+        int value=(int)data.getDataSet().getEntryForIndex(0).getValue();
+        //Log.d("percentuale ","value "+value);
+        chartMin.setTransparentCircleRadius(94);
+        chartMin.setTransparentCircleColor(getResources().getColor(R.color.light));
+        chartMin.getDescription().setEnabled(false);
+        chartMin.setRotationEnabled(false);
+        chartMin.setCenterText(val+"");
+        chartMin.setCenterTextSize(20);
+        chartMin.setCenterTextColor(Color.WHITE);
+        chartMin.getLegend().setEnabled(false);
+        chartMin.getDescription().setEnabled(false);
+        chartMin.setEntryLabelColor(Color.TRANSPARENT);
+        chartMin.setDrawEntryLabels(false);
+        chartMin.setDrawHoleEnabled(true);
+        chartMin.setHoleRadius(90.0f);
+        chartMin.setHoleColor(Color.TRANSPARENT);
+        chartMin.setData(data);
+        //chart.spin( 500,0,360 - angleTo, Easing.EasingOption.EaseInOutQuad ); // rotazione del grafico
+        chartMin.animateY(1000);
+        chartMin.notifyDataSetChanged(); // let the chart know it's data changed
+        //PieChartRenderer custom= new PieChartRenderer(chart, chart.getAnimator(),chart.getViewPortHandler());
+        //chart.setRenderer(custom);
+        chartMin.invalidate(); // refresh
+
+    }
+
+    private void readTodayData() {
+
+        String json = null;
+        Type listTypeDaySaveDataBean = new TypeToken<ArrayList<PressSaveDataBean>>() {
+        }.getType();
+        Calendar today = Calendar.getInstance();
+        String date = "" + today.get(Calendar.DAY_OF_MONTH) + today.get(Calendar.MONTH);
+        String path=getApplicationContext().getFilesDir()+"/"+currentMonth+"/"+FILE_BLOOD_PRESSURE+"_"+date+".txt";
+        try {
+            json = fileMamoryService.readFromFile(path);
+            if (!json.equals("")) {
+                pressToday = new Gson().fromJson(json, listTypeDaySaveDataBean);
+            } else {
+                pressToday = new ArrayList<>();
+            }
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+
+
+    }
+
+    private SimplePerformerListener mPerformerListener = new SimplePerformerListener() {
+        @Override
+        public void onResponseWristbandConfig(WristbandConfig config) {
+            WristbandVersion version = config.getWristbandVersion();
+            if (version.isBloodPressureEnable()) {
+                //minHg.setVisibility(View.VISIBLE);
+                //maxHg.setVisibility(View.VISIBLE);
+                //mOxyValue.setText(getString(R.string.oxygen_value, 0));
+            }
+
+        }
+
+        @Override
+        public void onOpenHealthyRealTimeData(int healthyType, boolean success) {
+            if (success) {
+                switch (healthyType) {
+                    case IDevicePerformer.HEALTHY_TYPE_HEART_RATE:
+
+                        break;
+                }
+            }
+        }
+
+        @Override
+        public void onCloseHealthyRealTimeData(int healthyType) {
+            switch (healthyType) {
+                case IDevicePerformer.HEALTHY_TYPE_HEART_RATE:
+
+                    break;
+
+                case IDevicePerformer.HEALTHY_TYPE_OXYGEN:
+
+                    break;
+
+                case IDevicePerformer.HEALTHY_TYPE_BLOOD_PRESSURE:
+
+                    break;
+
+                case IDevicePerformer.HEALTHY_TYPE_RESPIRATORY_RATE:
+
+                    break;
+            }
+        }
+
+        @Override
+        public void onResultHealthyRealTimeData(int heartRate, int oxygen, int diastolicPressure, int systolicPressure, int respiratoryRate) {
+            if (diastolicPressure != 0) {
+                if(waiting){
+                    waiting=false;
+                    textLoading.setText("Caricamento in corso.....");
+                    new Thread(new PressReadActivity.Run()).start();
+                }
+                //minHg.setText(String.valueOf(diastolicPressure));
+                entriesMin.get(0).setY(diastolicPressure*0.8f);
+                entriesMin.get(1).setY(100-(diastolicPressure*0.8f));
+                chartMin.setCenterText(""+diastolicPressure);
+                chartMin.notifyDataSetChanged();
+                chartMin.invalidate();
+                actualMinValue=diastolicPressure;
+
+            }
+            if (systolicPressure != 0) {
+                //maxHg.setText(String.valueOf(systolicPressure));
+                entriesMax.get(0).setY(systolicPressure*0.5f);
+                entriesMax.get(1).setY(100-(systolicPressure*0.5f));
+                chartMax.setCenterText(""+systolicPressure);
+                chartMax.notifyDataSetChanged();
+                chartMax.invalidate();
+                actualMaxValue=systolicPressure;
+            }
+
+        }
+
+
+    };
+
+    public class Run implements Runnable{
+        @Override
+        public void run() {
+            int progress=0;
+            while (true){
+                progressBar.incrementProgressBy(1);
+                progress++;
+                try {
+                    Thread.sleep(1000L);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                if(progress==45){
+                    break;
+                }
+            }
+
+            Date now=new Date();
+            PressSaveDataBean toSave=new PressSaveDataBean();
+            toSave.setDate(now);
+            PressData pressData=new PressData();
+            pressData.setMax(actualMaxValue);
+            pressData.setMin(actualMinValue);
+            toSave.setPressData(pressData);
+            pressToday.add(0,toSave);
+            Gson gson = new Gson();
+            String json = gson.toJson(pressToday);
+            Log.i("---string---", json);
+            Calendar today = Calendar.getInstance();
+            String date = "" + today.get(Calendar.DAY_OF_MONTH) + today.get(Calendar.MONTH);
+            try {
+                fileMamoryService.writeFile(FILE_BLOOD_PRESSURE + "_" + date + ".txt", json);
+            } catch (IOException e) {
+                e.printStackTrace();
+                Log.e("Errore", e.getMessage());
+            }
+            activity.finish();
+
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        mDevicePerformer.removePerformerListener(mPerformerListener);
+        if(((MyApplication)getApplication()).removeHrConnection()) {
+            mDevicePerformer.closeHealthyRealTimeData(IDevicePerformer.HEALTHY_TYPE_BLOOD_PRESSURE);
+        }
+    }
+
+}

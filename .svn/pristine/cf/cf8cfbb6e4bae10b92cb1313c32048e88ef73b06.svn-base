@@ -1,0 +1,317 @@
+package com.neperiagroup.happysalus;
+
+import android.app.Activity;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.graphics.Color;
+import android.support.v7.app.AppCompatActivity;
+import android.os.Bundle;
+import android.support.v7.widget.Toolbar;
+import android.util.Log;
+import android.view.Menu;
+import android.view.MenuItem;
+import android.widget.ProgressBar;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import com.github.mikephil.charting.charts.PieChart;
+import com.github.mikephil.charting.data.PieData;
+import com.github.mikephil.charting.data.PieDataSet;
+import com.github.mikephil.charting.data.PieEntry;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import com.htsmart.wristband.WristbandApplication;
+import com.htsmart.wristband.bean.WristbandConfig;
+import com.htsmart.wristband.bean.WristbandVersion;
+import com.htsmart.wristband.performer.IDevicePerformer;
+import com.htsmart.wristband.performer.SimplePerformerListener;
+import com.neperiagroup.happysalus.bean.SaveDataBean;
+import com.neperiagroup.happysalus.services.FileMamoryService;
+import com.neperiagroup.happysalus.utility.StoreInMemory;
+
+import java.io.IOException;
+import java.lang.reflect.Type;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.List;
+
+import cn.imengya.bluetoothle.scanner.ScanDeviceWrapper;
+
+public class HrReadDataActivity extends AppCompatActivity {
+    public static final String currentMonth="current_month";
+    private static final String TAG = HrReadDataActivity.class.getName();
+    private static final String DEVICE_DATA_KEY = TAG + ".device_data";
+    private static final String DEVICE_NAME_KEY = TAG + ".device_name";
+    private final String FILE_HR = "fileHr";
+
+    List<PieEntry> entries = new ArrayList<>();
+    PieChart chart;
+    int actualHrValue;
+    private IDevicePerformer mDevicePerformer = WristbandApplication.getDevicePerformer();
+    private ProgressBar progressBar;
+    private FileMamoryService fileMamoryService;
+    private List<SaveDataBean> hrToday;
+    private Activity activity=this;
+    private TextView textLoading;
+    private boolean waiting=true;
+    private String deviceName;
+    private Toolbar toolbar;
+    private TextView toolbarTitle;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_hr_read_data);
+
+        //deserialize device object.
+        deviceName = getIntent().getStringExtra(DEVICE_NAME_KEY);
+
+        //stats toolbar setup.
+        toolbar = findViewById(R.id.statsToolbar);
+        setSupportActionBar(toolbar);
+        getSupportActionBar().setDisplayShowTitleEnabled(false);
+        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+        toolbarTitle = findViewById(R.id.stats_toolbar_title);
+        toolbarTitle.setText(deviceName);
+
+        actualHrValue=0;
+        chart=findViewById(R.id.HrChart);
+
+        mDevicePerformer.addPerformerListener(mPerformerListener);
+        mDevicePerformer.cmd_requestWristbandConfig();
+        mDevicePerformer.openHealthyRealTimeData(IDevicePerformer.HEALTHY_TYPE_HEART_RATE);
+        paintPieChart(actualHrValue);
+        progressBar=findViewById(R.id.determinateBar);
+        progressBar.setProgress(0);
+        fileMamoryService=new FileMamoryService(getApplicationContext());
+        readTodayData();
+        textLoading=findViewById(R.id.loading);
+        textLoading.setText("In attesa del dispositivo");
+
+
+    }
+
+    public static Intent getIstanceIntent(Context context, String nameDevice){
+        Intent intent = new Intent(context, HrReadDataActivity.class);
+        intent.putExtra(DEVICE_NAME_KEY, nameDevice);
+        return intent;
+    }
+
+    @Override
+    public boolean onSupportNavigateUp(){
+        finish();
+        return true;
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu){
+        getMenuInflater().inflate(R.menu.menu_main_activity, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item){
+        switch(item.getItemId()){
+            case R.id.settings:
+                startActivity(SettingsActivity.getIstanceIntent(getApplicationContext()));
+                break;
+        }
+
+        return super.onOptionsItemSelected(item);
+    }
+
+    public void paintPieChart(float val )
+    {
+
+        int[] colors = new int[] {Color.argb(255,255,255,255), Color.TRANSPARENT};
+        entries.add(new PieEntry(val));
+
+        //Log.d("percentuale ","val "+val);
+        float other = 100-val;
+        //Log.d("percentuale ","other "+other);
+        entries.add(new PieEntry(other));
+
+        PieDataSet set = new PieDataSet(entries,null);
+        PieData data = new PieData(set);
+        set.setColors(colors);
+        data.setValueTextColor(Color.TRANSPARENT);
+
+
+        int value=(int)data.getDataSet().getEntryForIndex(0).getValue();
+
+
+        chart.setTransparentCircleRadius(94);
+        chart.setTransparentCircleColor(getResources().getColor(R.color.light));
+        chart.getDescription().setEnabled(false);
+        chart.setRotationEnabled(false);
+        chart.setCenterText(value+"\n%");
+        chart.setCenterTextSize(20);
+        chart.setCenterTextColor(Color.WHITE);
+        chart.getLegend().setEnabled(false);
+        chart.getDescription().setEnabled(false);
+        chart.setEntryLabelColor(Color.TRANSPARENT);
+        chart.setDrawEntryLabels(false);
+        chart.setDrawHoleEnabled(true);
+        chart.setHoleRadius(90.0f);
+        chart.setHoleColor(Color.TRANSPARENT);
+        chart.setData(data);
+        //chart.spin( 500,0,360 - angleTo, Easing.EasingOption.EaseInOutQuad ); // rotazione del grafico
+        chart.animateY(1000);
+        chart.notifyDataSetChanged(); // let the chart know it's data changed
+
+        //PieChartRenderer custom= new PieChartRenderer(chart, chart.getAnimator(),chart.getViewPortHandler());
+        //chart.setRenderer(custom);
+        chart.invalidate(); // refresh
+
+    }
+
+    private SimplePerformerListener mPerformerListener = new SimplePerformerListener() {
+        @Override
+        public void onResponseWristbandConfig(WristbandConfig config) {
+            WristbandVersion version = config.getWristbandVersion();
+            if (version.isOxygenEnable()) {
+                //mOxyValue.setVisibility(View.VISIBLE);
+                //mOxyValue.setText(getString(R.string.oxygen_value, 0));
+            }
+
+        }
+
+        @Override
+        public void onOpenHealthyRealTimeData(int healthyType, boolean success) {
+            if (success) {
+                switch (healthyType) {
+                    case IDevicePerformer.HEALTHY_TYPE_HEART_RATE:
+
+                        break;
+                }
+            }
+        }
+
+        @Override
+        public void onCloseHealthyRealTimeData(int healthyType) {
+            switch (healthyType) {
+                case IDevicePerformer.HEALTHY_TYPE_HEART_RATE:
+
+                    break;
+
+                case IDevicePerformer.HEALTHY_TYPE_OXYGEN:
+
+                    break;
+
+                case IDevicePerformer.HEALTHY_TYPE_BLOOD_PRESSURE:
+
+                    break;
+
+                case IDevicePerformer.HEALTHY_TYPE_RESPIRATORY_RATE:
+
+                    break;
+            }
+        }
+
+        @Override
+        public void onResultHealthyRealTimeData(int heartRate, int oxygen, int diastolicPressure, int systolicPressure, int respiratoryRate) {
+            if (heartRate != 0 ) {
+                //mOxyValue.setText(String.valueOf(oxygen)+ "%");
+                if(waiting){
+                    waiting=false;
+                    textLoading.setText("Caricamento in corso.....");
+                    new Thread(new HrReadDataActivity.Run()).start();
+                }
+                chart.setCenterText(String.valueOf(heartRate)+"");
+                changeVAlues(heartRate);
+                actualHrValue=heartRate;
+
+
+            }
+
+
+        }
+
+    };
+
+    private void changeVAlues(float val){
+        entries.get(0).setY(val);
+        entries.get(1).setY(100-val);
+        chart.notifyDataSetChanged();
+        chart.invalidate(); // refresh
+    }
+
+    public class Run implements Runnable{
+        @Override
+        public void run() {
+            int progress=0;
+            while (true){
+               progressBar.incrementProgressBy(1);
+               progress++;
+               try {
+                    Thread.sleep(1000L);
+               } catch (InterruptedException e) {
+                    e.printStackTrace();
+               }
+               if(progress==45){
+                   break;
+               }
+            }
+
+            Date now=new Date();
+            SaveDataBean toSave = new SaveDataBean();
+            toSave.setDate(now);
+            toSave.setValue(String.valueOf(actualHrValue));
+            hrToday.add(0,toSave);
+            Gson gson = new Gson();
+            String json = gson.toJson(hrToday);
+            Log.i("---string---", json);
+            Calendar today = Calendar.getInstance();
+            String date = "" + today.get(Calendar.DAY_OF_MONTH) + today.get(Calendar.MONTH);
+            try {
+                fileMamoryService.writeFile(FILE_HR + "_" + date + ".txt", json);
+            } catch (IOException e) {
+                e.printStackTrace();
+                Log.e("Errore", e.getMessage());
+            }
+            activity.finish();
+
+        }
+    }
+
+
+    private void readTodayData() {
+
+
+
+        String json = null;
+        Type listTypeDaySaveDataBean = new TypeToken<ArrayList<SaveDataBean>>() {
+        }.getType();
+        Calendar today = Calendar.getInstance();
+        String date = "" + today.get(Calendar.DAY_OF_MONTH) + today.get(Calendar.MONTH);
+        String path=getApplicationContext().getFilesDir()+"/"+currentMonth+"/"+FILE_HR+"_"+date+".txt";
+        try {
+            json = fileMamoryService.readFromFile(path);
+            if (!json.equals("")) {
+                hrToday = new Gson().fromJson(json, listTypeDaySaveDataBean);
+            } else {
+                hrToday = new ArrayList<>();
+            }
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+
+
+
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        mDevicePerformer.removePerformerListener(mPerformerListener);
+        if(((MyApplication)getApplication()).removeHrConnection()) {
+            mDevicePerformer.closeHealthyRealTimeData(IDevicePerformer.HEALTHY_TYPE_HEART_RATE);
+        }
+    }
+
+
+}

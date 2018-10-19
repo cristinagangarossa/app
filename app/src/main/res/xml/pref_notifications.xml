@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <android.support.v7.preference.SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:key="switch_notifications_phone"
+        android:title="Notifiche di telefono" />
+
+    <android.support.v7.preference.SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:key="switch_notifications_messages"
+        android:title="Notifiche di messaggi" />
+
+    <android.support.v7.preference.SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:key="switch_notifications_whatsapp"
+        android:title="Whatsapp" />
+
+    <android.support.v7.preference.SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:key="switch_notifications_facebook"
+        android:title="Facebook" />
+
+    <android.support.v7.preference.SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:key="switch_notifications_facebook_messenger"
+        android:title="Facebook messenger" />
+
+    <android.support.v7.preference.SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:key="switch_notifications_motion_reminder"
+        android:title="Promemoria movimento"
+        android:summary="Il braccialetto vibra se per 1 ora non percepisce alcun movimento" />
+
+    <android.support.v7.preference.SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:key="switch_notifications_lunch_break"
+        android:title="Pausa pranzo"
+        android:summary="Dalle 12:00 alle 14:00 non avvisa"/>
+
+    <android.support.v7.preference.SwitchPreferenceCompat
+        android:defaultValue="false"
+        android:key="switch_notifications_water"
+        android:title="Promemoria per bere acqua"
+        android:summary="Dalle 12:00 alle 14:00 non avvisa" />
+
+</PreferenceScreen>

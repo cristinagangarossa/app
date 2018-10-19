@@ -1,0 +1,57 @@
+<resources>
+    <string name="app_name">Happy Salus</string>
+    <string name="signup">SIGNUP</string>
+    <string name="signin">Login</string>
+    <string name="reg_account">Registra il tuo account.</string>
+    <string name="welcome">È bello riaverti qui.</string>
+    <string name="continue_facebook">Continua su Facebook</string>
+    <string name="continue_email">Continua con Email</string>
+    <string name="privacy">NON CONDIVIDEREMO ALCUNA INFORMAZIONE SENZA IL TUO CONSENSO</string>
+    <string name="hello">Ciao!</string>
+    <string name="base_start">iniziamo dalle basi</string>
+    <string name="gen_male">Uomo</string>
+    <string name="gen_female">Donna</string>
+    <string name="age">Età</string>
+    <string name="height">Altezza</string>
+    <string name="weight">Peso</string>
+    <string name="h_measure">CM</string>
+    <string name="w_measure">KG</string>
+    <string name="next">Avanti</string>
+
+    <!--Scan-->
+    <string name="no_device_found">Dispositivo non trovato</string>
+    <string name="scan">Scan</string>
+    <string name="stop_scan">Stop Scanning</string>
+    <string name="device_founded">Dispositivo trovato!</string>
+    <string name="device_q8">Q8 Smartband</string>
+    <string name="params">Parametri</string>
+    <string name="heart_rate">Heart Rate</string>
+    <string name="steps">Steps</string>
+    <string name="sleep">Sleep</string>
+    <string name="pair">Associa</string>
+    <!--Connect-->
+    <string name="connect">Connect</string>
+    <string name="connecting">Connecting...</string>
+    <string name="disconnect">Disconnect</string>
+    <string name="connect_failed">ConnectFailed</string>
+    <string name="sure">Sure</string>
+    <string name="cancel">Cancel</string>
+    <string name="save">Save</string>
+    <string name="prompt">Hint</string>
+    <string name="title_activity_prova">ProvaActivity</string>
+    <string name="title_home">Home</string>
+    <string name="title_dashboard">Dashboard</string>
+    <string name="title_notifications">Notifications</string>
+
+    <!-- Settings -->
+    <string name="settings">IMPOSTAZIONI</string>
+    <string name="notifications">NOTIFICHE</string>
+    <string name="ip68">FITNESS TRACKER IP68</string>
+    <string name="activity">ATTIVITA\'</string>
+
+
+    <!-- Stats -->
+    <string name="today">Oggi</string>
+    <string name="week">Settimana</string>
+    <string name="months">Mesi</string>
+</resources>

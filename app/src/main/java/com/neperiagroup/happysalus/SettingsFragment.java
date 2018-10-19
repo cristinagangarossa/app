@@ -1,0 +1,214 @@
+package com.neperiagroup.happysalus;
+
+import android.os.Bundle;
+import android.provider.SyncStateContract;
+import android.support.v4.app.Fragment;
+import android.support.v4.app.FragmentTransaction;
+import android.util.Log;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.AdapterView;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.ListAdapter;
+import android.widget.ListView;
+
+import com.neperiagroup.happysalus.adapters.MyDeviceAdapter;
+import com.neperiagroup.happysalus.adapters.OtherSettingsAdapter;
+import com.neperiagroup.happysalus.adapters.SettingsUserAdapter;
+import com.neperiagroup.happysalus.bean.SettingsUser;
+import com.neperiagroup.happysalus.services.DeviceService;
+import com.neperiagroup.happysalus.services.LoginService;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class SettingsFragment extends Fragment {
+
+    //SETTING USER
+    private LoginService loginService;
+    private ListView listViewSettingsUser;
+    private SettingsUserAdapter settingsUserAdapter;
+    private List<SettingsUser> settingsUsers;
+
+    //SETTINGS MY DEVICES
+    private ListView listViewMyDevice;
+    private MyDeviceAdapter myDeviceAdapter;
+    private DeviceService deviceService;
+    private Button buttonAddDevice;
+
+    //OTHER SETTINGS
+    private ListView listViewOtherSettings;
+    private OtherSettingsAdapter otherSettingsAdapter;
+    private List<String> listOtherSettings;
+
+    private Button buttonLogout;
+
+    public SettingsFragment(){
+    }
+
+    @Override
+    public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+        View view = inflater.inflate(R.layout.fragment_settings, container, false);
+        deviceService = new DeviceService(getContext().getApplicationContext());
+        //SETTINGS USER
+        loginService = new LoginService(getContext().getApplicationContext());
+        listViewSettingsUser = view.findViewById(R.id.listViewSettingsUser);
+        settingsUsers = new ArrayList<SettingsUser>();
+        SettingsUser settingsUser = null;
+        if(loginService.getUser().getSex()){
+            settingsUser = new SettingsUser("Sesso:", "Uomo");
+            settingsUsers.add(settingsUser);
+        }else{
+            settingsUser = new SettingsUser("Sesso:", "Donna");
+            settingsUsers.add(settingsUser);
+        }
+        settingsUser = new SettingsUser("Data di nascita:", loginService.getUser().getBirthday());
+        settingsUsers.add(settingsUser);
+        settingsUser = new SettingsUser("Altezza:", loginService.getUser().getHeight() + " cm");
+        settingsUsers.add(settingsUser);
+        settingsUser = new SettingsUser("Peso:", loginService.getUser().getWeight() + " kg");
+        settingsUsers.add(settingsUser);
+        settingsUserAdapter = new SettingsUserAdapter(getContext().getApplicationContext(), settingsUsers);
+        listViewSettingsUser.setAdapter(settingsUserAdapter);
+        listViewSettingsUser.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.FILL_PARENT, getListViewHeightBasedOnChildren(listViewSettingsUser)));
+
+        listViewSettingsUser.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
+                switch (i){
+                    case 0: // Sesso
+                        FragmentTransaction fragmentTransaction = getFragmentManager().beginTransaction();
+                        fragmentTransaction.setCustomAnimations(R.anim.enter_from_right, R.anim.exit_to_left);
+                        fragmentTransaction.replace(R.id.frameLayoutSettings, new ModificationSex());
+                        fragmentTransaction.addToBackStack(null);
+                        fragmentTransaction.commit();
+                        break;
+                    case 1: // Data di Nascita
+                        FragmentTransaction fragmentTransaction1 = getFragmentManager().beginTransaction();
+                        fragmentTransaction1.setCustomAnimations(R.anim.enter_from_right, R.anim.exit_to_left);
+                        fragmentTransaction1.replace(R.id.frameLayoutSettings, new ModificationsDate());
+                        fragmentTransaction1.addToBackStack(null);
+                        fragmentTransaction1.commit();
+                        break;
+                    case 2: // Altezza
+                        FragmentTransaction fragmentTransaction2 = getFragmentManager().beginTransaction();
+                        fragmentTransaction2.setCustomAnimations(R.anim.enter_from_right, R.anim.exit_to_left);
+                        fragmentTransaction2.replace(R.id.frameLayoutSettings, new ModificationsHeight());
+                        fragmentTransaction2.addToBackStack(null);
+                        fragmentTransaction2.commit();
+                        break;
+                    case 3: // Peso
+                        FragmentTransaction fragmentTransaction3 = getFragmentManager().beginTransaction();
+                        fragmentTransaction3.setCustomAnimations(R.anim.enter_from_right, R.anim.exit_to_left);
+                        fragmentTransaction3.replace(R.id.frameLayoutSettings, new ModificationsWeight());
+                        fragmentTransaction3.addToBackStack(null);
+                        fragmentTransaction3.commit();
+                        break;
+                }
+            }
+        });
+
+        //SETTINGS MY DEVICES
+        listViewMyDevice = view.findViewById(R.id.listViewSettingsMyDevice);
+
+        myDeviceAdapter = new MyDeviceAdapter(getContext().getApplicationContext(), deviceService.getDevices());
+        listViewMyDevice.setAdapter(myDeviceAdapter);
+        buttonAddDevice = view.findViewById(R.id.buttonAddDevice);
+        listViewMyDevice.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.FILL_PARENT, getListViewHeightBasedOnChildren(listViewMyDevice)+10));
+
+        listViewMyDevice.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
+                switch (i){
+                    case 0:
+                        FragmentTransaction fragmentTransaction = getFragmentManager().beginTransaction();
+                        fragmentTransaction.setCustomAnimations(R.anim.enter_from_right, R.anim.exit_to_left);
+                        fragmentTransaction.replace(R.id.frameLayoutSettings, new DeviceSettingsFragment());
+                        fragmentTransaction.addToBackStack(null);
+                        fragmentTransaction.commit();
+                        break;
+                }
+            }
+        });
+
+        buttonAddDevice.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                //startActivity(SearchActivity.getInstanceIntent(getContext().getApplicationContext()));
+            }
+        });
+
+        //OTHER SETTINGS
+        listViewOtherSettings = view.findViewById(R.id.listViewOtherSettings);
+        listOtherSettings = new ArrayList<String>();
+        initOtherSettings(listOtherSettings);
+        otherSettingsAdapter = new OtherSettingsAdapter(getContext().getApplicationContext(), listOtherSettings);
+        listViewOtherSettings.setAdapter(otherSettingsAdapter);
+        listViewOtherSettings.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.FILL_PARENT, getListViewHeightBasedOnChildren(listViewOtherSettings)+10));
+        listViewOtherSettings.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
+                switch (i){
+                    case 0://Alert
+                        break;
+                    case 1://Notifiche
+                        FragmentTransaction fragmentTransaction = getFragmentManager().beginTransaction();
+                        fragmentTransaction.setCustomAnimations(R.anim.enter_from_right, R.anim.exit_to_left);
+                        fragmentTransaction.replace(R.id.frameLayoutSettings, new NotificationsFragment());
+                        fragmentTransaction.addToBackStack(null);
+                        fragmentTransaction.commit();
+                        break;
+                    case 2://Unità
+                        break;
+                    case 3://App
+                        break;
+                    case 4://Chi siamo
+                        break;
+                    case 5://FAQ
+                        break;
+                }
+            }
+        });
+
+        buttonLogout = view.findViewById(R.id.buttonLogout);
+        buttonLogout.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                loginService.logout();
+                startActivity(MainActivity.getIstanceIntent(getContext().getApplicationContext()));
+            }
+        });
+        return view;
+    }
+
+    public static int getListViewHeightBasedOnChildren(ListView listView)
+    {
+        ListAdapter listAdapter = listView.getAdapter();
+        if (listAdapter != null)
+        {
+            int totalHeight = 0;
+            int size = listAdapter.getCount();
+            for (int i = 0; i < size; i++)
+            {
+                View listItem = listAdapter.getView(i, null, listView);
+                listItem.measure(0, 0);
+                totalHeight += listItem.getMeasuredHeight();
+            }
+            totalHeight = totalHeight + (listView.getDividerHeight() * (listAdapter.getCount() - 1));
+            return totalHeight;
+        }
+        return 0;
+    }
+
+    public void initOtherSettings(List<String> listOtherSettings){
+        listOtherSettings.add("Alert");
+        listOtherSettings.add("Notifiche");
+        listOtherSettings.add("Unità");
+        listOtherSettings.add("App");
+        listOtherSettings.add("Chi siamo");
+        listOtherSettings.add("FAQ");
+    }
+
+}

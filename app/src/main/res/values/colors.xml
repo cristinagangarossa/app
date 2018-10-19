@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="white">#ffffff</color>
+    <color name="light">#70ffffff</color>
+    <color name="light_focus">#90ffffff</color>
+    <color name="gray">#A9CED4</color>
+    <color name="gray_lighter">#f4f4f4</color>
+    <color name="gray_light">#d1d1d1</color>
+    <color name="gray_dark">#aaaaaa</color>
+    <color name="gray_darker">#424242</color>
+    <color name="primary">#29bdc2</color>
+    <color name="primary_focus">#1faaaa</color>
+    <color name="primary_disabled">#AFE1E0</color>
+    <color name="secondary">#ffa000</color>
+    <color name="secondary_focus">#e28703</color>
+    <color name="facebook">#3b5998</color>
+    <color name="facebook_focus">#577ad6</color>
+
+    <color name="colorPrimary">#3F51B5</color>
+    <color name="colorPrimaryDark">#303F9F</color>
+    <color name="colorAccent">#FF4081</color>
+    <color name="red">#ff0000</color>
+</resources>

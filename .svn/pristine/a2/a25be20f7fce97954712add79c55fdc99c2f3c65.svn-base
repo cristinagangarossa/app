@@ -1,0 +1,226 @@
+package com.neperiagroup.happysalus.services;
+
+import android.content.Context;
+import android.content.ContextWrapper;
+import android.os.Build;
+import android.support.annotation.RequiresApi;
+
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import com.neperiagroup.happysalus.bean.HrDayData;
+import com.neperiagroup.happysalus.bean.SaveDataBean;
+import com.neperiagroup.happysalus.bean.WeekData;
+import com.neperiagroup.happysalus.utility.StoreInMemory;
+
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.lang.reflect.Type;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Scanner;
+import java.util.Set;
+
+public class FileMamoryService {
+
+    private StoreInMemory storeInMemory;
+    private Context context;
+
+    public static final String currentMonth="current_month";
+    public static final String preMonth="pre_month";
+
+    public FileMamoryService(Context context){
+        this.storeInMemory=new StoreInMemory(context);
+        this.context=context;
+    }
+
+    public void addToFile(String fileName,String text) throws IOException {
+        String filePath = context.getFilesDir() + "/" + fileName;
+        PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(filePath, true)));
+        out.println(text);
+        out.close();
+
+    }
+
+    public void writeFile(String fileName,String text) throws IOException {
+        String filePath = context.getFilesDir() + "/"+currentMonth+"/" + fileName;
+        PrintWriter out = new PrintWriter(new BufferedWriter(new FileWriter(filePath,false)));
+        out.println(text);
+        out.close();
+    }
+
+
+    public String readFromFile(String filePath) throws IOException {
+        //String filePath = context.getFilesDir() + "/" + fileName;
+        File file = new File(filePath);
+        if(file.length()==0){
+            return"";
+        }
+        StringBuilder fileContents = new StringBuilder((int)file.length());
+        Scanner scanner = new Scanner(file);
+        String lineSeparator = System.getProperty("line.separator");
+
+        try {
+            while(scanner.hasNextLine()) {
+                fileContents.append(scanner.nextLine() + lineSeparator);
+            }
+            return fileContents.toString();
+        } finally {
+            scanner.close();
+        }
+
+
+    }
+
+    private File openFile(String fileName) throws IOException {
+        String filePath = context.getFilesDir() + "/" + fileName;
+        File file = new File(filePath );
+        return file;
+
+    }
+
+    public List<String> getAllFileNameContain(String substring, String path){
+        //String filePath = context.getFilesDir()+"";
+
+        File folder = new File(path);
+
+        File[] listOfFiles = folder.listFiles();
+        List<String> files=new ArrayList<String>();
+        for (int i = 0; i < listOfFiles.length; i++) {
+            if (listOfFiles[i].isFile()) {
+                if(listOfFiles[i].getName().contains(substring)){
+                    files.add(listOfFiles[i].getName());
+                }
+            } else if (listOfFiles[i].isDirectory()) {
+                //TODO mast be recursiv??
+            }
+        }
+        return files;
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.N)
+    public List<WeekData<HrDayData>> getAllWeekHrData() throws IOException {
+        List<WeekData<HrDayData>> weekDataList=new ArrayList<WeekData<HrDayData>>();
+        String pathCurrent=context.getFilesDir()+"/"+currentMonth;
+        String pathPre=context.getFilesDir()+"/"+preMonth;
+        List<String> filesName=getAllFileNameContain("fileHr",pathCurrent);
+        filesName.addAll(getAllFileNameContain("fileHr",pathCurrent));
+        String json="";
+        Type listTypeDaySaveDataBean = new TypeToken<ArrayList<SaveDataBean>>() {
+        }.getType();
+        List<HrDayData> days=new ArrayList<HrDayData>();
+        for(String file :filesName){
+            json = readFromFile(file);
+            List<SaveDataBean> dayData=new Gson().fromJson(json, listTypeDaySaveDataBean);
+            if(dayData.size()>0) {
+                HrDayData day = new HrDayData();
+                day.setDate(dayData.get(0).getDate());
+                float min=Float.parseFloat(dayData.get(0).getValue());
+                float max=Float.parseFloat(dayData.get(0).getValue());
+                float value=0;
+                for(SaveDataBean data:dayData){
+                    float current=Float.parseFloat(data.getValue());
+                    if(current<min){
+                        min=current;
+                    }
+                    if(current>max){
+                        max=current;
+                    }
+                    value+=current;
+                }
+                value=value/dayData.size();
+                day.setData(String.valueOf(value));
+                day.setMin(String.valueOf(min));
+                day.setMax(String.valueOf(max));
+                days.add(day);
+            }
+
+        }
+        Map<Integer,List<HrDayData>> map=new HashMap<Integer,List<HrDayData>>();
+        for(HrDayData day:days){
+            Calendar c= Calendar.getInstance();
+            c.setTime(day.getDate());
+            int week=c.get(Calendar.WEEK_OF_YEAR);
+            if(map.containsKey(week)){
+                map.get(week).add(day);
+            }else{
+                List<HrDayData> weekElement=new ArrayList<>();
+                weekElement.add(day);
+                map.put(week,weekElement);
+            }
+        }
+        Set<Integer> keys=map.keySet();
+        SimpleDateFormat format1 = new SimpleDateFormat("dd-MMM");
+        for(Integer i :keys){
+            List<HrDayData> week=map.get(i);
+            WeekData<HrDayData> weekData=new WeekData<HrDayData>();
+            Calendar dayOfWeek=Calendar.getInstance();
+            dayOfWeek.setTime(week.get(0).getDate());
+            weekData.setDays(week);
+            if(isCurrentWeek(week.get(0).getDate())){
+                weekData.setWeek("Questa settimana");
+            }else{
+                Calendar start=Calendar.getInstance();
+                int year=dayOfWeek.get(Calendar.YEAR);
+                int weekNumber=dayOfWeek.get(Calendar.MONTH);
+                start.setWeekDate(year,weekNumber,Calendar.MONDAY);
+
+                Calendar end=Calendar.getInstance();
+                end.setWeekDate(year,weekNumber+1,Calendar.SUNDAY);
+                String dataToWeek= String.format(format1.format(start) + " " + format1.format(end));
+                weekData.setWeek(dataToWeek);
+            }
+            float media=0;
+            for(HrDayData day: week){
+                media+=Float.valueOf(day.getData());
+            }
+            media=media/week.size();
+            weekData.setValue(""+media);
+            weekDataList.add(weekData);
+        }
+
+
+
+        return weekDataList;
+    }
+
+    public void switchMonth(){
+
+        String currentMonthPath=context.getFilesDir()+"/"+currentMonth;
+        File currentMonthFolder = new File(currentMonthPath);
+        String preMonthPath=context.getFilesDir()+"/"+preMonth;
+        File preMonthFolder=new File(preMonthPath);
+        preMonthFolder.delete();
+        preMonthFolder=new File(preMonthPath);
+        currentMonthFolder.renameTo(preMonthFolder);
+        currentMonthFolder=new File(currentMonthPath);
+        currentMonthFolder.mkdir();
+
+    }
+
+    private boolean isCurrentWeek(Date d){
+        Calendar today=Calendar.getInstance();
+        Calendar day=Calendar.getInstance();
+        day.setTime(d);
+        return day.get(Calendar.WEEK_OF_YEAR)==today.get(Calendar.WEEK_OF_YEAR);
+    }
+
+
+
+
+
+
+
+
+}

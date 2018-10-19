@@ -1,0 +1,148 @@
+package com.neperiagroup.happysalus;
+
+import android.content.Context;
+import android.content.Intent;
+import android.support.v7.app.AppCompatActivity;
+import android.os.Bundle;
+import android.support.v7.widget.Toolbar;
+import android.util.Log;
+import android.view.View;
+import android.widget.Button;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import com.neperiagroup.happysalus.services.LoginService;
+
+public class LoginActivity extends AppCompatActivity{
+    private static final String TAG = LoginActivity.class.getName();
+    private static final String KEY_ID_BUTTON = TAG + ".idButton";
+
+    private LoginService loginService;
+    private int idButton;
+
+    private TextView mLabelMessage;
+    private Button buttonFacebook;
+    private Button buttonEmail;
+    //private TextView titleActionBar;
+
+    private Toolbar toolbar;
+    private TextView toolbarTitle;
+
+    @Override
+    protected void onCreate(final Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_signup);
+
+        //signup toolbar setup.
+        toolbar = findViewById(R.id.signupToolbar);
+        setSupportActionBar(toolbar);
+        getSupportActionBar().setDisplayShowTitleEnabled(false);
+        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+        toolbarTitle = findViewById(R.id.signup_toolbar_title);
+
+        loginService = new LoginService(getApplicationContext());
+
+        idButton = getIntent().getIntExtra(KEY_ID_BUTTON, 0);
+        mLabelMessage = findViewById(R.id.labelMessage);
+        buttonFacebook = findViewById(R.id.nextButtonFacebook);
+        buttonEmail = findViewById(R.id.nextButtonEmail);
+
+        if(idButton == R.id.loginButton){
+            if(loginService.isLogged()){
+                toolbarTitle.setText(R.string.signin);
+                mLabelMessage.setText(R.string.welcome);
+            }
+            else{
+                toolbarTitle.setText(R.string.signup);
+                mLabelMessage.setText(R.string.reg_account);
+            }
+        }
+        else if(idButton == R.id.singupButton){
+            toolbarTitle.setText(R.string.signup);
+
+        }
+
+        buttonFacebook.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+            if(!loginService.isLogged()){//Se l'utente non ha fatto l'accesso
+                if(!loginService.isSignup()){//Se l'utente non è registrato
+                    loginService.login(1);//1=facebook
+                    Toast.makeText(getApplicationContext(), "Login effettuata con successo.", Toast.LENGTH_SHORT).show();
+                    startActivity(WelcomeActivity.getIstanceIntente(getApplicationContext()));
+                }else{//Altrimenti l'utente risulta registrato ma non ha fatto l'accesso
+                    loginService.login(1);//1=facebook
+                    Toast.makeText(getApplicationContext(), "Login effettuata con successo.", Toast.LENGTH_SHORT).show();
+                    startActivity(DashboardActivity.getInstanceIntent(getApplicationContext()));
+                    finish();
+                }
+            }else{
+                if(!loginService.isSignup()){//Se l'utente non è registrato
+                    loginService.login(1);//1=facebook
+                    Toast.makeText(getApplicationContext(), "Login effettuata con successo.", Toast.LENGTH_SHORT).show();
+                    startActivity(WelcomeActivity.getIstanceIntente(getApplicationContext()));
+                }else{//Altrimenti l'utente risulta registrato ma non ha fatto l'accesso
+                    loginService.login(1);//1=facebook
+                    Toast.makeText(getApplicationContext(), "Login effettuata con successo.", Toast.LENGTH_SHORT).show();
+                    startActivity(DashboardActivity.getInstanceIntent(getApplicationContext()));
+                    finish();
+                }
+            }
+            }
+        });
+
+        buttonEmail.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+
+                if(!loginService.isLogged()){//Se l'utente non ha fatto l'accesso
+                    if(!loginService.isSignup()){//Se l'utente non è registrato
+                        Toast.makeText(getApplicationContext(), "Utente non registrato.", Toast.LENGTH_SHORT).show();
+                        //loginService.login(2);//1=Email
+                       // Toast.makeText(getApplicationContext(), "Login effettuata con successo.", Toast.LENGTH_SHORT).show();
+                        startActivity(SignUpActivity.getInstanceIntent(getApplicationContext()));
+                    }else{//Altrimenti l'utente risulta registrato ma non ha fatto l'accesso
+
+                        //loginService.login(2);//1=Email
+                        Toast.makeText(getApplicationContext(), "Login effettuata con successo.", Toast.LENGTH_SHORT).show();
+                        startActivity(MailLoginActivity.getInstanceIntent(getApplicationContext()));
+                        finish();
+                    }
+                }else{
+<<<<<<< .mine
+
+                    Toast.makeText(getApplicationContext(), "ramo else.", Toast.LENGTH_SHORT).show();
+                    startActivity(SignUpActivity.getInstanceIntent(getApplicationContext()));
+                    finish();
+||||||| .r70
+                    startActivity(DashboardActivity.getInstanceIntent(getApplicationContext()));
+                    finish();
+=======
+                    if(!loginService.isSignup()){//Se l'utente non è registrato
+                        loginService.login(1);//1=facebook
+                        Toast.makeText(getApplicationContext(), "Login effettuata con successo.", Toast.LENGTH_SHORT).show();
+                        startActivity(WelcomeActivity.getIstanceIntente(getApplicationContext()));
+                    }else{//Altrimenti l'utente risulta registrato ma non ha fatto l'accesso
+                        loginService.login(1);//1=facebook
+                        Toast.makeText(getApplicationContext(), "Login effettuata con successo.", Toast.LENGTH_SHORT).show();
+                        startActivity(DashboardActivity.getInstanceIntent(getApplicationContext()));
+                        finish();
+                    }
+>>>>>>> .r83
+                }
+            }
+        });
+    }
+
+    public static Intent getIstanceIntent(Context context, int idButton){
+        Intent intent = new Intent(context, LoginActivity.class);
+        intent.putExtra(KEY_ID_BUTTON, idButton);
+        return intent;
+    }
+
+    @Override
+    public boolean onSupportNavigateUp(){
+        finish();
+        return true;
+    }
+}

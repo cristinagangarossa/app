@@ -1,0 +1,61 @@
+<resources>
+    <!-- Base application theme. -->
+    <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        <!-- Customize your theme here. -->
+        <!--
+        <item name="android:background">@color/gray_lighter</item>
+        -->
+        <item name="android:fontFamily">@font/avenir</item>
+        <item name="colorPrimary">@color/secondary</item>
+        <item name="colorPrimaryDark">@color/secondary</item>
+        <item name="colorAccent">@color/gray_light</item>
+        <item name="colorControlActivated">@color/primary</item>
+        <item name="preferenceTheme">@style/PreferenceThemeOverlay</item>
+    </style>
+
+    <style name="ProvaTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+        <item name="android:fontFamily">@font/avenir</item>
+        <item name="colorPrimary">@color/secondary</item>
+        <item name="colorPrimaryDark">@color/secondary</item>
+        <item name="colorAccent">@color/gray_light</item>
+    </style>
+
+    <!-- Splash Screen Theme -->
+    <style name="SplashTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowBackground">@drawable/splash</item>
+    </style>
+
+    <!-- Signup Toolbar Theme -->
+    <style name="SignupToolbar" parent="Theme.AppCompat">
+        <item name="android:layout_gravity">center</item>
+        <item name="android:background">@android:color/transparent</item>
+        <item name="android:textColorPrimary">@color/gray_darker</item>
+        <item name="android:textColorSecondary">@color/gray_darker</item>
+        <item name="android:actionMenuTextColor">@color/gray_darker</item>
+        <item name="android:homeAsUpIndicator">@drawable/ic_back</item>
+    </style>
+
+    <!-- Dashboard Toolbar Theme -->
+    <style name="DashboardToolbar" parent="Theme.AppCompat">
+        <item name="android:layout_gravity">center</item>
+        <item name="android:background">@color/secondary</item>
+        <item name="android:textColorPrimary">@color/white</item>
+        <item name="android:textColorSecondary">@color/white</item>
+        <item name="android:actionMenuTextColor">@color/white</item>
+    </style>
+
+    <!-- Dashboard Toolbar Theme -->
+    <style name="StatsToolbar" parent="Theme.AppCompat">
+        <item name="colorPrimaryDark">@color/primary</item>
+        <item name="android:layout_gravity">center</item>
+        <item name="android:background">@color/primary</item>
+        <item name="android:textColorPrimary">@color/white</item>
+        <item name="android:textColorSecondary">@color/white</item>
+        <item name="android:actionMenuTextColor">@color/white</item>
+        <item name="android:homeAsUpIndicator">@drawable/ic_back_light</item>
+    </style>
+
+    <style name="AppTheme.AppBarOverlay" parent="ThemeOverlay.AppCompat.Dark.ActionBar" />
+
+    <style name="AppTheme.PopupOverlay" parent="ThemeOverlay.AppCompat.Light" />
+</resources>

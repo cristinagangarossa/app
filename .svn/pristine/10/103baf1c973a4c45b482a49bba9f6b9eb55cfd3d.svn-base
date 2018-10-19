@@ -1,0 +1,108 @@
+package com.neperiagroup.happysalus;
+
+import android.Manifest;
+import android.bluetooth.BluetoothAdapter;
+import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.support.annotation.NonNull;
+import android.support.v7.app.AppCompatActivity;
+import android.os.Bundle;
+import android.support.v7.preference.PreferenceManager;
+import android.view.View;
+import android.widget.Button;
+import android.widget.Toast;
+
+import com.neperiagroup.happysalus.services.LoginService;
+import com.yanzhenjie.permission.AndPermission;
+import com.yanzhenjie.permission.PermissionListener;
+import com.yanzhenjie.permission.Rationale;
+import com.yanzhenjie.permission.RationaleListener;
+
+import java.util.List;
+
+public class MainActivity extends AppCompatActivity {
+
+    private static final int REQUEST_PERMISSION_CODE = 1;
+    private final static int REQUEST_ENABLE_BT = 1;
+
+    private Button singupButton;
+    private Button loginButton;
+
+    private LoginService loginService;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_login);
+
+        loginService = new LoginService(getApplicationContext());
+
+        AndPermission
+                .with(this)
+                .requestCode(REQUEST_PERMISSION_CODE)
+                .permission(
+                        Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                        Manifest.permission.BLUETOOTH,
+                        Manifest.permission.BLUETOOTH_ADMIN,
+                        Manifest.permission.ACCESS_COARSE_LOCATION,
+                        Manifest.permission.INTERNET
+
+                ).rationale(new RationaleListener() {
+            @Override
+            public void showRequestPermissionRationale(int requestCode, Rationale rationale) {
+                AndPermission.rationaleDialog(MainActivity.this, rationale);
+            }
+        }).callback(new PermissionListener() {
+            @Override
+            public void onSucceed(int requestCode, @NonNull List<String> grantPermissions) {
+                //do nothing
+            }
+
+            @Override
+            public void onFailed(int requestCode, @NonNull List<String> deniedPermissions) {
+                if (AndPermission.hasAlwaysDeniedPermission(MainActivity.this, deniedPermissions)) {
+                    AndPermission.defaultSettingDialog(MainActivity.this);
+                }
+            }
+        }).start();
+
+        BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+        if (!mBluetoothAdapter.isEnabled()) {
+            Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+            startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
+        }
+
+        singupButton = findViewById(R.id.singupButton);
+        loginButton = findViewById(R.id.loginButton);
+
+        singupButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                startActivity(LoginActivity.getIstanceIntent(getApplicationContext(), R.id.singupButton));
+            }
+        });
+
+        loginButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+            if(loginService.isLogged()){
+                if(!loginService.isSignup()){//Se l'utente non è registrato
+                    startActivity(WelcomeActivity.getIstanceIntente(getApplicationContext()));
+                }else{//Altrimenti l'utente risulta registrato
+                    startActivity(DashboardActivity.getInstanceIntent(getApplicationContext()));
+                    finish();
+                }
+            }else startActivity(LoginActivity.getIstanceIntent(getApplicationContext(), R.id.loginButton));
+            }
+        });
+
+        PreferenceManager.setDefaultValues(this, R.xml.pref_activity_device, false);//Setta i valori di default alla prima apertura
+        PreferenceManager.setDefaultValues(this, R.xml.pref_notifications, false);
+    }
+
+    public static Intent getIstanceIntent(Context context){
+        Intent intent = new Intent(context, MainActivity.class);
+        return  intent;
+    }
+}

@@ -1,0 +1,43 @@
+package com.neperiagroup.happysalus.utility;
+
+import android.content.Context;
+import android.content.SharedPreferences;
+
+import com.neperiagroup.happysalus.bean.User;
+
+public class StoreInMemory {
+
+    private Context context;
+
+    public StoreInMemory(Context context) {
+        this.context = context;
+    }
+
+    public void setValueBooleanToStore(String key, boolean value){
+        String nameClassKey = context.getClass().getName();
+        SharedPreferences sharedPreferences = context.getSharedPreferences(nameClassKey, Context.MODE_PRIVATE);
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putBoolean(key, value);
+        editor.commit();
+    }
+
+    public boolean getValueBooleanFromStore(String key){
+        String nameClassKey = context.getClass().getName();
+        SharedPreferences sharedPreferences = context.getSharedPreferences(nameClassKey, Context.MODE_PRIVATE);
+        return sharedPreferences.getBoolean(key, false);
+    }
+
+    public void setValueIntToStore(String key, int value){
+        String nameClassKey = context.getClass().getName();
+        SharedPreferences sharedPreferences = context.getSharedPreferences(nameClassKey, Context.MODE_PRIVATE);
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putInt(key, value);
+        editor.commit();
+    }
+
+    public int getValueIntFromStore(String key){
+        String nameClassKey = context.getClass().getName();
+        SharedPreferences sharedPreferences = context.getSharedPreferences(nameClassKey, Context.MODE_PRIVATE);
+        return sharedPreferences.getInt(key, 0);
+    }
+}

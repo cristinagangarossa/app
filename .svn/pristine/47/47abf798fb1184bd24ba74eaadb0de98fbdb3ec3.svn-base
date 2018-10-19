@@ -1,0 +1,588 @@
+package com.neperiagroup.happysalus;
+
+import android.content.Context;
+import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Color;
+import android.os.Build;
+import android.os.Bundle;
+import android.support.annotation.RequiresApi;
+import android.support.design.widget.TabLayout;
+import android.support.v7.app.AppCompatActivity;
+import android.support.v7.widget.Toolbar;
+import android.util.Log;
+import android.view.Menu;
+import android.view.MenuItem;
+import android.view.View;
+import android.widget.Button;
+import android.widget.HorizontalScrollView;
+import android.widget.ListView;
+import android.widget.TabHost;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import com.github.mikephil.charting.charts.BarChart;
+import com.github.mikephil.charting.components.AxisBase;
+import com.github.mikephil.charting.components.Legend;
+import com.github.mikephil.charting.components.XAxis;
+import com.github.mikephil.charting.data.BarData;
+import com.github.mikephil.charting.data.BarDataSet;
+import com.github.mikephil.charting.data.BarEntry;
+import com.github.mikephil.charting.data.Entry;
+import com.github.mikephil.charting.formatter.IAxisValueFormatter;
+import com.github.mikephil.charting.highlight.Highlight;
+import com.github.mikephil.charting.interfaces.datasets.IBarDataSet;
+import com.github.mikephil.charting.listener.OnChartValueSelectedListener;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.reflect.TypeToken;
+import com.htsmart.wristband.WristbandApplication;
+import com.htsmart.wristband.bean.WristbandConfig;
+import com.htsmart.wristband.bean.WristbandVersion;
+import com.htsmart.wristband.performer.IDevicePerformer;
+import com.htsmart.wristband.performer.SimplePerformerListener;
+import com.neperiagroup.happysalus.Renderers.HrRendered;
+import com.neperiagroup.happysalus.adapters.WeekDataAdapter;
+import com.neperiagroup.happysalus.bean.DataDevice;
+import com.neperiagroup.happysalus.bean.GenericDayData;
+import com.neperiagroup.happysalus.bean.HrDayData;
+import com.neperiagroup.happysalus.bean.SaveDataBean;
+import com.neperiagroup.happysalus.bean.WeekData;
+import com.neperiagroup.happysalus.services.FileMamoryService;
+import com.neperiagroup.happysalus.adapters.*;
+
+import java.io.IOException;
+import java.lang.reflect.Type;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.Set;
+
+public class HeartRateStatsActivity extends AppCompatActivity{
+    private static final String TAG = HeartRateStatsActivity.class.getName();
+    private static final String DEVICE_DATA_KEY = TAG + ".device_data";
+    private static final String DEVICE_NAME_KEY = TAG + ".device_name";
+    public static final String currentMonth="current_month";
+
+    private Toolbar toolbar;
+    private TextView toolbarTitle;
+
+    private String deviceName;
+    private DataDevice deviceData;
+
+    private TextView mHrValue;
+    private ListView weeksDataList;
+
+    private TextView valueText;
+    private TextView minText;
+    private TextView maxText;
+
+    private FileMamoryService fileMamoryService;
+    private final String FILE_HR = "fileHr";
+
+
+    private IDevicePerformer mDevicePerformer = WristbandApplication.getDevicePerformer();
+
+    private String[] colors = new String[] {"#FFFFFF", "#FFA000", "#E28703","#EF0F0F"};
+    private List<BarEntry> entries1;
+    List<WeekData> weekDataList;
+    BarDataSet set1;
+    Button readButton;
+    WeekDataAdapter weekDataAdapter;
+    List<SaveDataBean> hrToday;
+    List<Float> hrValuesByHour;
+
+    TabLayout daysTab;
+    HorizontalScrollView monthScroll;
+    HorizontalScrollView weekScroll;
+
+    private BarChart chart;
+    @RequiresApi(api = Build.VERSION_CODES.N)
+    @Override
+    protected void onCreate(Bundle savedInstanceState){
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_hr_stats);
+
+        monthScroll = findViewById(R.id.horizontalScrollMonthHr);
+        monthScroll.setVisibility(View.INVISIBLE);
+        weekScroll = findViewById(R.id.horizontalScrollWeekHr);
+        weekScroll.setVisibility(View.INVISIBLE);
+        valueText=findViewById(R.id.value);
+        minText=findViewById(R.id.min);
+        maxText=findViewById(R.id.max);
+
+        fileMamoryService=new FileMamoryService(getApplicationContext());
+        daysTab=findViewById(R.id.tabDays);
+
+        //deserialize device object.
+        deviceName = getIntent().getStringExtra(DEVICE_NAME_KEY);
+
+        //stats toolbar setup.
+        toolbar = findViewById(R.id.statsToolbar);
+        setSupportActionBar(toolbar);
+        getSupportActionBar().setDisplayShowTitleEnabled(false);
+        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+        toolbarTitle = findViewById(R.id.stats_toolbar_title);
+        toolbarTitle.setText(deviceName);
+
+        mDevicePerformer.addPerformerListener(mPerformerListener);
+        mDevicePerformer.cmd_requestWristbandConfig();
+
+        //mHrValue = findViewById(R.id.hrValue);
+        if(((MyApplication)getApplication()).addHrConnection()) {
+            mDevicePerformer.openHealthyRealTimeData(IDevicePerformer.HEALTHY_TYPE_HEART_RATE); //Avvia la lettura dei bpm
+        }
+        weeksDataList=findViewById(R.id.listWeekData);
+        //List<WeekData> weeks=getWeeks();
+        weekDataList=getWeeks();
+        weekDataAdapter=new WeekDataAdapter(getApplicationContext(),getWeeks());
+        weeksDataList.setAdapter(weekDataAdapter);
+
+
+        chart = findViewById(R.id.chart);
+        startGrapf();
+        readButton=(Button) findViewById(R.id.read_button);
+        readButton.setOnClickListener( new View.OnClickListener() {
+
+            @Override
+            public void onClick(View v) {
+               startActivity(HrReadDataActivity.getIstanceIntent(getApplicationContext(), deviceName));
+            }
+        });
+        getRealData();
+        setValues();
+        TabLayout tabLayout = findViewById(R.id.tabDays);
+        tabLayout.addOnTabSelectedListener(new TabLayout.OnTabSelectedListener() {
+            @Override
+            public void onTabSelected(TabLayout.Tab tab) {
+                //do stuff here
+
+                switch (tab.getPosition()){
+                    case 0:
+                        Toast.makeText(getApplicationContext(), "today", Toast.LENGTH_LONG).show();
+                        changeToToday();
+                        weekScroll.setVisibility(View.INVISIBLE);
+                        monthScroll.setVisibility(View.INVISIBLE);
+                        break;
+                    case 1:
+                        Toast.makeText(getApplicationContext(), "week", Toast.LENGTH_LONG).show();
+                        changeToWeek();
+                        weekScroll.setVisibility(View.VISIBLE);
+                        monthScroll.setVisibility(View.INVISIBLE);
+                        break;
+                    case 2:
+                        Toast.makeText(getApplicationContext(), "month", Toast.LENGTH_LONG).show();
+                        changeToMonth();
+                        weekScroll.setVisibility(View.INVISIBLE);
+                        monthScroll.setVisibility(View.VISIBLE);
+                        break;
+
+                }
+
+            }
+
+            @Override
+            public void onTabUnselected(TabLayout.Tab tab) {
+
+            }
+
+            @Override
+            public void onTabReselected(TabLayout.Tab tab) {
+
+            }
+        });
+
+    }
+
+
+    @Override
+    public boolean onSupportNavigateUp(){
+        finish();
+        return true;
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu){
+        getMenuInflater().inflate(R.menu.menu_main_activity, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item){
+        switch(item.getItemId()){
+            case R.id.settings:
+                startActivity(SettingsActivity.getIstanceIntent(getApplicationContext()));
+                break;
+        }
+
+        return super.onOptionsItemSelected(item);
+    }
+
+    public static Intent getInstanceIntent(Context context, String deviceName){
+        Intent intent = new Intent(context, HeartRateStatsActivity.class);
+        intent.putExtra(DEVICE_NAME_KEY, deviceName);
+        return intent;
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.N)
+    @Override
+    protected void onResume() {
+        super.onResume();
+        weekDataAdapter=new WeekDataAdapter(getApplicationContext(),getWeeks());
+        weeksDataList.setAdapter(weekDataAdapter);
+        setValues();
+
+    }
+
+    private SimplePerformerListener mPerformerListener = new SimplePerformerListener() {
+        @Override
+        public void onResponseWristbandConfig(WristbandConfig config) {
+            WristbandVersion version = config.getWristbandVersion();
+            if (version.isHeartRateEnable()) {
+                //mHrValue.setVisibility(View.VISIBLE);
+                //mHrValue.setText(getString(R.string.heart_rate_value, 0));
+            }
+        }
+
+        @Override
+        public void onOpenHealthyRealTimeData(int healthyType, boolean success) {
+            if (success) {
+                switch (healthyType) {
+                    case IDevicePerformer.HEALTHY_TYPE_HEART_RATE:
+
+                        break;
+                }
+            }
+        }
+
+        @Override
+        public void onCloseHealthyRealTimeData(int healthyType) {
+            switch (healthyType) {
+                case IDevicePerformer.HEALTHY_TYPE_HEART_RATE:
+
+                    break;
+
+                case IDevicePerformer.HEALTHY_TYPE_OXYGEN:
+
+                    break;
+
+                case IDevicePerformer.HEALTHY_TYPE_BLOOD_PRESSURE:
+
+                    break;
+
+                case IDevicePerformer.HEALTHY_TYPE_RESPIRATORY_RATE:
+
+                    break;
+            }
+        }
+
+        @Override
+        public void onResultHealthyRealTimeData(int heartRate, int oxygen, int diastolicPressure, int systolicPressure, int respiratoryRate) {
+            if (heartRate != 0) {
+                //mHrValue.setText(getString(R.string.heart_rate_value, heartRate));
+            }
+        }
+    };
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        mDevicePerformer.removePerformerListener(mPerformerListener);
+        if(((MyApplication)getApplication()).removeHrConnection()) {
+            mDevicePerformer.closeHealthyRealTimeData(IDevicePerformer.HEALTHY_TYPE_HEART_RATE);
+        }
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.N)
+    private List<WeekData> getWeeks(){
+        List<WeekData> weeks=new ArrayList<WeekData>();
+        FileMamoryService fileMamoryService=new FileMamoryService(getApplicationContext());
+        try {
+            weeks=fileMamoryService.getAllWeekHrData();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return weeks;
+
+    }
+
+
+
+    @RequiresApi(api = Build.VERSION_CODES.N)
+    private void getRealData()  {
+        FileMamoryService fileMamoryService=new FileMamoryService(getApplicationContext());
+        try {
+            fileMamoryService.getAllWeekHrData();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        Log.i(TAG,"file letti");
+    }
+
+
+    private void startGrapf(){
+
+        // TODO mapping in x axis from number to string;
+        final HashMap<Integer, String> numMap = new HashMap<>();
+        // TODO parameter x axis & y
+        Random rand = new Random();
+        int count = 24;
+        entries1 = new ArrayList<>();
+
+        setEntriesToday();
+        for (int i=0; i<count; i++) {
+            float randomNumber = rand.nextFloat() * (130 - 50) +50;
+
+            if (i==0) {
+                numMap.put(i, "00:00"); // la mappatura avviene qui;
+            }
+            if (i>0 && i<count) {
+                numMap.put(i, ""); // la mappatura avviene qui;
+            }
+            if (i==count){
+                numMap.put(i, "24:00"); // la mappatura avviene qui;
+            }
+            entries1.add(new BarEntry(i,settingStackNumber(hrValuesByHour.get(i))));
+            /*
+            if (i==3){
+                entries1.add(new BarEntry(i,settingStackNumber(70)));
+            }else if(i==20){
+                entries1.add(new BarEntry(i,settingStackNumber(95)));
+            }
+            else if (i==13)
+                entries1.add(new BarEntry(i,settingStackNumber(120)));
+            else
+                entries1.add(new BarEntry(i,settingStackNumber(0)));
+            */
+        }
+
+
+
+
+        if (chart.getData() != null && chart.getData().getDataSetCount() > 0)
+        {
+            set1 = (BarDataSet) chart.getData().getDataSetByIndex(0);
+            set1.setValues(entries1);
+            //set1.setHighLightAlpha(0); // To remove background color use setHighLightAlpha(0);
+
+            set1.setHighlightEnabled(true);
+
+            set1.setDrawValues(false);
+            chart.getData().notifyDataChanged();
+            chart.notifyDataSetChanged();
+        }
+        else
+        {
+            set1 = new BarDataSet(entries1, "");
+            //set1.setHighLightAlpha(0); // To remove background color use setHighLightAlpha(0);
+
+            set1.setDrawIcons(false);
+            set1.setDrawValues(false);
+            set1.setColors(getColors());
+            ArrayList<IBarDataSet> dataSets = new ArrayList<>();
+
+            dataSets.add(set1);
+
+            BarData data = new BarData(dataSets);
+            data.setBarWidth(0.1f);
+
+            chart.setData(data);
+        }
+
+        //chart.setOnChartValueSelectedListener(this);
+
+        // TODO disable zoom
+        chart.setScaleEnabled(false);
+
+        // TODO disable description label
+        chart.getDescription().setEnabled(false);
+
+        // TODO this animationX
+        chart.animateX(1000);
+
+        // TODO Settings generics
+        chart.setFitBars(true);
+
+        chart.getAxisLeft().setDrawGridLines(true); // disattiva la griglia di sinistra.
+        chart.getXAxis().setDrawGridLines(false);
+        chart.getAxisRight().setDrawGridLines(false); // disattiva la griglia di destra.
+        chart.setDrawValueAboveBar(false); //imposta i valori sotto la punta max di ogni barra
+        chart.setDrawBarShadow(false); // setta l'ombra su tutta la barra..
+        chart.getXAxis().setPosition(XAxis.XAxisPosition.BOTTOM);
+
+        // TODO color parameter on the left
+        chart.getAxisLeft().setTextColor(Color.WHITE);
+        chart.getAxisRight().setDrawAxisLine(false);
+        chart.getAxisLeft().setDrawGridLines(true); // grid line left
+        chart.getAxisLeft().setAxisLineColor(Color.WHITE); // colore linea Y
+        chart.getAxisRight().setEnabled(false);
+        chart.getXAxis().setAxisLineColor(Color.WHITE);
+
+        //Todo this Mapping axis x
+        final XAxis xAxis = chart.getXAxis();
+        xAxis.setTextColor(Color.WHITE);
+        xAxis.setLabelCount(24);
+        xAxis.setValueFormatter(new IAxisValueFormatter() {
+            @Override
+            public String getFormattedValue(float value, AxisBase axis) {
+                return numMap.get((int)value);
+            }
+        });
+
+        Legend legend = chart.getLegend();
+        legend.setEnabled(false); // hide legend
+
+        Bitmap starBitmap[] = {BitmapFactory.decodeResource(getResources(), R.drawable.white_circle),
+                BitmapFactory.decodeResource(getResources(), R.drawable.soft_orange_circle),
+                BitmapFactory.decodeResource(getResources(), R.drawable.hard_orange_circle),
+                BitmapFactory.decodeResource(getResources(), R.drawable.red_circle)};
+
+        HrRendered customRenderer = new HrRendered(chart, chart.getAnimator(), chart.getViewPortHandler(), starBitmap);
+
+
+
+        chart.setOnChartValueSelectedListener(new OnChartValueSelectedListener() {
+            @Override
+            public void onValueSelected(final Entry entry, Highlight highlight) {
+
+                final float x=entry.getX();
+                final float y=entry.getY();
+                System.out.println("x: "+x);
+                System.out.println("y: "+y);
+
+                Highlight h1 = new Highlight(x,0,0);
+                Highlight h2 = new Highlight(x,0,1);
+                Highlight h3 = new Highlight(x,0,2);
+                Highlight h4 = new Highlight(x,0,3);
+
+
+
+                chart.highlightValues(new Highlight[]{h1,h2,h3,h4});
+                highlight.getDataIndex();
+                set1.setHighLightColor(Color.YELLOW); // change color selection barchar -> change Color.TRASPARENT
+                //set1.setHighLightAlpha(0);
+
+            }
+
+            @Override
+            public void onNothingSelected() {
+
+            }
+        });
+
+        chart.setRenderer(customRenderer);
+        chart.invalidate();
+    }
+
+
+    private int[] getColors() {
+        int[] values = new int[colors.length];
+
+        for (int i = 0; i < colors.length; i++) {
+            values[i] = Color.parseColor(colors[i]);
+        }
+
+        return values;
+    }
+
+    private float[] settingStackNumber(float parameter) {
+        float temp = parameter;
+        if (temp <= 85) {
+            return new float[]{temp, 0, 0, 0};
+        }
+        else if (temp > 85 && temp < 105) {
+            temp = temp - 85;
+            return new float[]{85, temp, 0, 0};
+        }
+        else  if (temp > 105 && temp < 125) {
+            temp = temp - 105;
+            return new float[]{85, 20, temp, 0};
+        }
+        else {
+            temp = temp - 125;
+            return new float[]{85, 20, 20, temp};
+        }
+
+
+    }
+
+    private void setEntriesToday() {
+        try {
+            hrToday=fileMamoryService.getHrDayData(new Date());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        Log.i(TAG,"lettura dati oggi completata");
+
+        Map<Integer,List<SaveDataBean>> dataIntervals=new HashMap<Integer,List<SaveDataBean>>();
+        for(int i =0;i<24;i++){
+            List lista=new ArrayList<SaveDataBean>();
+            dataIntervals.put(i,lista);
+        }
+        for(SaveDataBean data:hrToday){
+            Calendar c=Calendar.getInstance();
+            c.setTime(data.getDate());
+            int h=c.get(Calendar.HOUR_OF_DAY);
+            dataIntervals.get(h).add(data);
+        }
+        Set<Integer> keys=dataIntervals.keySet();
+        List<Float> values=new ArrayList();
+        for(int i =0;i<24;i++){
+            List<SaveDataBean> dataByH=dataIntervals.get(i);
+            float valueH=0;
+            for (SaveDataBean data:dataByH){
+                valueH+=Float.valueOf(data.getValue());
+            }
+            if(dataByH.size()>0){
+                valueH=valueH/dataByH.size();
+            }
+            values.add(valueH);
+        }
+        hrValuesByHour=values;
+
+
+    }
+
+    private void changeToToday(){
+        //TODO
+    }
+    private void changeToWeek(){
+        //TODO
+    }
+    private void changeToMonth(){
+        //TODO
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.N)
+    private void setValues(){
+        List<WeekData> weeks=new ArrayList<WeekData>();
+        FileMamoryService fileMamoryService=new FileMamoryService(getApplicationContext());
+        try {
+            weeks=fileMamoryService.getAllWeekHrData();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        if(weeks!=null && weeks.size()>0) {
+            if (weeks.get(0).getWeek() == "Questa settimana") {
+                List<HrDayData> days=weeks.get(0).getDays();
+                Calendar today=Calendar.getInstance();
+                Calendar day=Calendar.getInstance();
+                day.setTime(days.get(0).getDate());
+                if(today.get(Calendar.MONTH)==day.get(Calendar.MONTH) && today.get(Calendar.DAY_OF_MONTH)==day.get(Calendar.DAY_OF_MONTH)){
+                    valueText.setText(days.get(0).getData());
+                    minText.setText(days.get(0).getMin());
+                    maxText.setText(days.get(0).getMax());
+                }else{
+                    valueText.setText("0");
+                    minText.setText("0");
+                    maxText.setText("0");
+                }
+            }
+        }
+    }
+}
